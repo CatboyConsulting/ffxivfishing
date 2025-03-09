@@ -1,28 +1,31 @@
 use std::{
+    cmp::{max, min},
     fmt,
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
 pub const EORZEA_WEATHER_PERIOD: EorzeaDuration = EorzeaDuration {
-    timestamp: BELL_IN_ESEC * 8,
+    esec: BELL_IN_ESEC * 8,
 };
 
 const EORZEA_TIME_CONST: f64 = 3600.0 / 175.0;
 
-const YEAR_IN_ESEC: u64 = 12 * MOON_IN_ESEC;
-const MOON_IN_ESEC: u64 = 32 * SUN_IN_ESEC;
-const SUN_IN_ESEC: u64 = 24 * BELL_IN_ESEC;
-const BELL_IN_ESEC: u64 = 60 * MINUTE_IN_ESEC;
-const MINUTE_IN_ESEC: u64 = 60;
+pub const YEAR_IN_ESEC: u64 = 12 * MOON_IN_ESEC;
+pub const MOON_IN_ESEC: u64 = 32 * SUN_IN_ESEC;
+pub const SUN_IN_ESEC: u64 = 24 * BELL_IN_ESEC;
+pub const BELL_IN_ESEC: u64 = 60 * MINUTE_IN_ESEC;
+pub const MINUTE_IN_ESEC: u64 = 60;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+pub const EORZEA_ZERO_TIME: EorzeaTime = EorzeaTime { timestamp: 0 };
+
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd, Eq, Ord)]
 pub struct EorzeaTime {
     timestamp: u64,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub struct EorzeaDuration {
-    timestamp: u64,
+    esec: u64,
 }
 
 #[derive(Debug, PartialEq)]
@@ -96,8 +99,15 @@ impl EorzeaTime {
             + Duration::from_secs((self.timestamp as f64 / EORZEA_TIME_CONST).round() as u64)
     }
 
-    pub fn round(&mut self, sec: u64) {
-        self.timestamp -= self.timestamp % sec;
+    pub fn round(&mut self, d: EorzeaDuration) {
+        self.timestamp -= self.timestamp % d.esec;
+    }
+
+    fn duration_since(&self, other: EorzeaTime) -> Result<EorzeaDuration, EorzeaDurationError> {
+        if other.timestamp > self.timestamp {
+            return Err(EorzeaDurationError);
+        }
+        Ok(EorzeaDuration::from_esecs(self.timestamp - other.timestamp))
     }
 }
 
@@ -122,7 +132,7 @@ impl std::ops::Add<EorzeaDuration> for EorzeaTime {
 
     fn add(self, rhs: EorzeaDuration) -> Self::Output {
         EorzeaTime {
-            timestamp: self.timestamp + rhs.timestamp,
+            timestamp: self.timestamp + rhs.esec,
         }
     }
 }
@@ -131,27 +141,27 @@ impl std::ops::Sub<EorzeaDuration> for EorzeaTime {
     type Output = Self;
 
     fn sub(self, rhs: EorzeaDuration) -> Self::Output {
-        if self.timestamp < rhs.timestamp {
+        if self.timestamp < rhs.esec {
             return EorzeaTime { timestamp: 0 };
         }
         EorzeaTime {
-            timestamp: self.timestamp - rhs.timestamp,
+            timestamp: self.timestamp - rhs.esec,
         }
     }
 }
 
 impl std::ops::AddAssign<EorzeaDuration> for EorzeaTime {
     fn add_assign(&mut self, rhs: EorzeaDuration) {
-        self.timestamp += rhs.timestamp;
+        self.timestamp += rhs.esec;
     }
 }
 
 impl std::ops::SubAssign<EorzeaDuration> for EorzeaTime {
     fn sub_assign(&mut self, rhs: EorzeaDuration) {
-        if self.timestamp < rhs.timestamp {
+        if self.timestamp < rhs.esec {
             return;
         }
-        self.timestamp -= rhs.timestamp;
+        self.timestamp -= rhs.esec;
     }
 }
 
@@ -164,9 +174,8 @@ impl EorzeaDuration {
         minute: u8,
         second: u8,
     ) -> Result<EorzeaDuration, EorzeaTimeCreationError> {
-        EorzeaTime::new(year, moon, sun, bell, minute, second).map(|et| EorzeaDuration {
-            timestamp: et.timestamp,
-        })
+        EorzeaTime::new(year + 1, moon + 1, sun + 1, bell, minute, second)
+            .map(|et| EorzeaDuration { esec: et.timestamp })
     }
 
     pub fn new(
@@ -174,9 +183,71 @@ impl EorzeaDuration {
         minute: u8,
         second: u8,
     ) -> Result<EorzeaDuration, EorzeaTimeCreationError> {
-        EorzeaTime::new(1, 1, 1, bell, minute, second).map(|et| EorzeaDuration {
-            timestamp: et.timestamp,
-        })
+        EorzeaTime::new(1, 1, 1, bell, minute, second)
+            .map(|et| EorzeaDuration { esec: et.timestamp })
+    }
+
+    pub fn from_esecs(esec: u64) -> EorzeaDuration {
+        EorzeaDuration { esec }
+    }
+
+    pub fn year(&self) -> u16 {
+        (1 + self.esec / YEAR_IN_ESEC) as u16
+    }
+    pub fn moon(&self) -> u8 {
+        (1 + self.esec / MOON_IN_ESEC % 12) as u8
+    }
+    pub fn sun(&self) -> u8 {
+        (1 + self.esec / SUN_IN_ESEC % 32) as u8
+    }
+    pub fn bell(&self) -> u8 {
+        (self.esec / BELL_IN_ESEC % 24) as u8
+    }
+    pub fn minute(&self) -> u8 {
+        (self.esec / MINUTE_IN_ESEC % 60) as u8
+    }
+    pub fn second(&self) -> u8 {
+        (self.esec % 60) as u8
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct EorzeaDurationError;
+
+#[derive(Debug, PartialEq)]
+pub struct EorzeaTimeSpan {
+    start: EorzeaTime,
+    duration: EorzeaDuration,
+}
+
+impl EorzeaTimeSpan {
+    pub fn new(start: EorzeaTime, duration: EorzeaDuration) -> EorzeaTimeSpan {
+        EorzeaTimeSpan { start, duration }
+    }
+    pub fn new_start_end(
+        start: EorzeaTime,
+        end: EorzeaTime,
+    ) -> Result<EorzeaTimeSpan, EorzeaDurationError> {
+        end.duration_since(start)
+            .map(|d| EorzeaTimeSpan { start, duration: d })
+    }
+
+    pub fn start(&self) -> EorzeaTime {
+        self.start
+    }
+
+    pub fn duration(&self) -> EorzeaDuration {
+        self.duration
+    }
+
+    pub fn end(&self) -> EorzeaTime {
+        self.start + self.duration
+    }
+
+    pub fn overlap(&self, other: &EorzeaTimeSpan) -> Result<EorzeaTimeSpan, EorzeaDurationError> {
+        let max_start = max(self.start, other.start);
+        let min_end = min(self.end(), other.end());
+        EorzeaTimeSpan::new_start_end(max_start, min_end)
     }
 }
 
@@ -254,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    pub fn to_system_time() {
+    pub fn eorzea_time_to_system_time() {
         let scenarios = vec![
             0,
             MINUTE_IN_ESEC,
@@ -269,5 +340,45 @@ mod tests {
             assert!(et.is_ok());
             assert_eq!(et.unwrap().to_system_time(), time)
         }
+    }
+
+    #[test]
+    pub fn eorzea_time_span() {
+        let time_span =
+            EorzeaTimeSpan::new(EorzeaTime::from_esecs(0), EorzeaDuration::from_esecs(1));
+        assert_eq!(time_span.end(), EorzeaTime::from_esecs(1));
+    }
+
+    #[test]
+    pub fn eorzea_time_span_new_start_end() {
+        let start = EorzeaTime::from_esecs(0);
+        let end = EorzeaTime::from_esecs(1);
+        let result = EorzeaTimeSpan::new_start_end(start, end);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().duration, EorzeaDuration::from_esecs(1));
+
+        assert!(EorzeaTimeSpan::new_start_end(end, start).is_err())
+    }
+
+    #[test]
+    pub fn eorzea_time_span_overlap() {
+        let span1 = EorzeaTimeSpan::new(EorzeaTime::from_esecs(0), EorzeaDuration::from_esecs(1));
+        let span2 = EorzeaTimeSpan::new(EorzeaTime::from_esecs(0), EorzeaDuration::from_esecs(2));
+        assert_eq!(span1.overlap(&span2), span2.overlap(&span1));
+        let overlap = span1.overlap(&span2);
+        assert!(overlap.is_ok());
+        let o = overlap.unwrap();
+        assert_eq!(o.start(), EorzeaTime::from_esecs(0));
+        assert_eq!(o.end(), EorzeaTime::from_esecs(1));
+
+        let span3 = EorzeaTimeSpan::new(EorzeaTime::from_esecs(1), EorzeaDuration::from_esecs(2));
+        let overlap = span1.overlap(&span3);
+        assert!(overlap.is_ok());
+        let o = overlap.unwrap();
+        assert_eq!(o.start(), EorzeaTime::from_esecs(1));
+        assert_eq!(o.end(), EorzeaTime::from_esecs(1));
+
+        let span4 = EorzeaTimeSpan::new(EorzeaTime::from_esecs(2), EorzeaDuration::from_esecs(1));
+        assert!(span1.overlap(&span4).is_err());
     }
 }

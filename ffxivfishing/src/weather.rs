@@ -50,14 +50,16 @@ impl WeatherForecast {
         current_weather_set: &[Weather],
         limit: u32,
     ) -> Option<EorzeaTime> {
-        let mut time = start - EorzeaDuration::new(8, 0, 0).unwrap();
+        let mut time = start;
+        time.round(EORZEA_WEATHER_PERIOD);
+        time -= EORZEA_WEATHER_PERIOD;
 
         let mut prev_weather = self.weather_at(time);
         for _ in 0..limit {
             time += EORZEA_WEATHER_PERIOD;
             let current_weather = self.weather_at(time);
-            if previous_weather_set.contains(prev_weather)
-                && current_weather_set.contains(current_weather)
+            if (previous_weather_set.is_empty() || previous_weather_set.contains(prev_weather))
+                && (current_weather_set.is_empty() || current_weather_set.contains(current_weather))
             {
                 return Some(time);
             }
