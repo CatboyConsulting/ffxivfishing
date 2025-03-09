@@ -3,7 +3,6 @@ use std::{
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
-pub const EORZEA_WEATHER_PERIOD_IN_SEC: u64 = 1440;
 pub const EORZEA_WEATHER_PERIOD: EorzeaDuration = EorzeaDuration {
     timestamp: BELL_IN_ESEC * 8,
 };
