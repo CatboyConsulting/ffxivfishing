@@ -1,9 +1,8 @@
-use std::{error::Error, time::SystemTime};
+use std::time::Duration;
 
 use crate::{
     eorzea_time::{
-        self, EORZEA_WEATHER_PERIOD, EORZEA_ZERO_TIME, EorzeaDuration, EorzeaTime, EorzeaTimeSpan,
-        SUN_IN_ESEC,
+        EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan, SUN_IN_ESEC,
     },
     weather::{Weather, WeatherForecast},
 };
@@ -30,8 +29,18 @@ pub enum Hookset {
 }
 
 pub enum Bait<'a> {
-    Fish(&'a Fish<'a>),
+    Mooch(&'a Fish<'a>),
     Bait(String),
+}
+
+pub struct Intuition<'a> {
+    length: Duration,
+    requirements: Vec<(u8, &'a Fish<'a>)>,
+}
+
+pub enum Lure {
+    Moderate,
+    Ambitious,
 }
 
 pub struct Fish<'a> {
@@ -44,6 +53,9 @@ pub struct Fish<'a> {
     weather_set: Vec<Weather>,
     tug: Tug,
     hookset: Hookset,
+    intuition: Option<Intuition<'a>>,
+    lure: Lure,
+    lure_proc: bool,
     snagging: bool,
     gig: bool,
     folklore: bool,
@@ -53,9 +65,9 @@ pub struct Fish<'a> {
 
 impl<'a> Fish<'a> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new<'b>(
+    pub fn new(
         name: String,
-        location: &'b FishingHole<'b>,
+        location: &'a FishingHole<'a>,
         window_start: EorzeaDuration,
         window_end: EorzeaDuration,
         bait: Bait<'a>,
@@ -63,43 +75,43 @@ impl<'a> Fish<'a> {
         weather_set: Vec<Weather>,
         tug: Tug,
         hookset: Hookset,
+        intuition: Option<Intuition<'a>>,
+        lure: Lure,
+        lure_proc: bool,
         snagging: bool,
         gig: bool,
         folklore: bool,
         fish_eyes: bool,
         patch: (u8, u8),
-    ) -> Option<Fish<'a>>
-    where
-        'b: 'a,
-    {
-        if window_start >= EorzeaDuration::from_esecs(SUN_IN_ESEC) {
-            return None;
-        }
-        Some(Self {
+    ) -> Fish<'a> {
+        Self {
             name,
             location,
-            window_start,
-            window_end,
+            window_start: window_start % EORZEA_SUN,
+            window_end: window_end % EORZEA_SUN,
             bait,
             previous_weather_set,
             weather_set,
             tug,
             hookset,
+            intuition,
+            lure,
+            lure_proc,
             snagging,
             gig,
             folklore,
             fish_eyes,
             patch,
-        })
+        }
     }
 
     pub fn window_on_day(&self, etime: EorzeaTime) -> EorzeaTimeSpan {
         let mut day = etime;
-        day.round(EorzeaDuration::new_ext(0, 0, 1, 0, 0, 0).unwrap());
+        day.round(EORZEA_SUN);
         let start = day + self.window_start;
         let mut end = day + self.window_end;
         if end < start {
-            end += EorzeaDuration::from_esecs(SUN_IN_ESEC);
+            end += EORZEA_SUN;
         }
         EorzeaTimeSpan::new_start_end(start, end).unwrap()
     }
@@ -146,11 +158,14 @@ mod tests {
             weather_set: vec![Weather::Clouds],
             tug: Tug::Light,
             hookset: Hookset::Precision,
+            intuition: None,
             snagging: false,
             gig: false,
             folklore: false,
             fish_eyes: false,
             patch: (7, 0),
+            lure: Lure::Moderate,
+            lure_proc: false,
         };
         let result = fish
             .next_window(EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap(), 1000)
@@ -187,6 +202,9 @@ mod tests {
             folklore: false,
             fish_eyes: false,
             patch: (7, 0),
+            intuition: None,
+            lure: Lure::Moderate,
+            lure_proc: false,
         };
         let result = fish
             .next_window(EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap(), 1000)

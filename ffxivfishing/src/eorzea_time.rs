@@ -1,12 +1,14 @@
 use std::{
     cmp::{max, min},
     fmt,
+    ops::Rem,
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
 pub const EORZEA_WEATHER_PERIOD: EorzeaDuration = EorzeaDuration {
     esec: BELL_IN_ESEC * 8,
 };
+pub const EORZEA_SUN: EorzeaDuration = EorzeaDuration { esec: SUN_IN_ESEC };
 
 const EORZEA_TIME_CONST: f64 = 3600.0 / 175.0;
 
@@ -248,6 +250,15 @@ impl EorzeaTimeSpan {
         let max_start = max(self.start, other.start);
         let min_end = min(self.end(), other.end());
         EorzeaTimeSpan::new_start_end(max_start, min_end)
+    }
+}
+
+impl Rem for EorzeaDuration {
+    type Output = Self;
+    fn rem(self, rhs: Self) -> Self {
+        EorzeaDuration {
+            esec: self.esec % rhs.esec,
+        }
     }
 }
 
