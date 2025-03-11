@@ -1,48 +1,54 @@
 use std::time::Duration;
 
 use crate::{
-    eorzea_time::{
-        EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan, SUN_IN_ESEC,
-    },
+    eorzea_time::{EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan},
     weather::{Weather, WeatherForecast},
 };
 
+#[derive(Debug)]
 pub struct Region<'a> {
     name: String,
     weather: &'a WeatherForecast,
 }
 
+#[derive(Debug)]
 pub struct FishingHole<'a> {
     name: String,
     region: &'a Region<'a>,
 }
 
+#[derive(Debug)]
 pub enum Tug {
     Light,
     Medium,
     Heavy,
 }
 
+#[derive(Debug)]
 pub enum Hookset {
     Precision,
     Powerful,
 }
 
+#[derive(Debug)]
 pub enum Bait<'a> {
     Mooch(&'a Fish<'a>),
     Bait(String),
 }
 
+#[derive(Debug)]
 pub struct Intuition<'a> {
     length: Duration,
     requirements: Vec<(u8, &'a Fish<'a>)>,
 }
 
+#[derive(Debug)]
 pub enum Lure {
     Moderate,
     Ambitious,
 }
 
+#[derive(Debug)]
 pub struct Fish<'a> {
     name: String,
     location: &'a FishingHole<'a>,
@@ -128,6 +134,27 @@ impl<'a> Fish<'a> {
             Ok(o) => Some(o),
             Err(_) => self.next_window(time + EORZEA_WEATHER_PERIOD, limit - 1),
         }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl FishingHole<'_> {
+    pub fn new<'a>(name: String, region: &'a Region) -> FishingHole<'a> {
+        FishingHole { name, region }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl Region<'_> {
+    pub fn new(name: String, weather: &WeatherForecast) -> Region<'_> {
+        Region { name, weather }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 

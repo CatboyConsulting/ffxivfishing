@@ -1,10 +1,11 @@
 use std::time::{SystemTimeError, UNIX_EPOCH};
 
-use crate::eorzea_time::{EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime};
+use crate::eorzea_time::{EORZEA_WEATHER_PERIOD, EorzeaTime};
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum Weather {
     Unknown,
+    Id(u32),
     Sunny,
     Clouds,
     ClearSkies,
@@ -13,6 +14,7 @@ pub enum Weather {
     Wind,
 }
 
+#[derive(Debug)]
 pub struct WeatherForecast {
     region: String,
     weather_rates: Vec<(u8, Weather)>,
@@ -41,6 +43,10 @@ impl WeatherForecast {
             .map(|(_, w)| w)
             .next()
             .unwrap_or(&Weather::Unknown)
+    }
+
+    pub fn region(&self) -> &str {
+        &self.region
     }
 
     pub fn find_pattern(
@@ -91,6 +97,10 @@ impl WeatherForecast {
             time += EORZEA_WEATHER_PERIOD;
         }
         result
+    }
+
+    pub(crate) fn clone(&self) -> WeatherForecast {
+        todo!()
     }
 }
 
