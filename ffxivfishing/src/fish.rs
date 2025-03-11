@@ -122,7 +122,8 @@ impl<'a> Fish<'a> {
         EorzeaTimeSpan::new_start_end(start, end).unwrap()
     }
 
-    pub fn next_window(&self, mut time: EorzeaTime, mut limit: u32) -> Option<EorzeaTimeSpan> {
+    pub fn next_window(&self, start: EorzeaTime, mut limit: u32) -> Option<EorzeaTimeSpan> {
+        let mut time = start;
         while limit > 0 {
             let next_weather = self.location.region.weather.find_pattern(
                 time,
@@ -132,7 +133,7 @@ impl<'a> Fish<'a> {
             )?;
             let weather_span = EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
             if let Ok(window) = self.window_on_day(time).overlap(&weather_span) {
-                if window.duration().total_seconds() > 0 {
+                if start <= window.start() && window.duration().total_seconds() > 0 {
                     return Some(window);
                 }
             }
