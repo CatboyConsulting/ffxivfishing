@@ -98,10 +98,6 @@ impl WeatherForecast {
         }
         result
     }
-
-    pub(crate) fn clone(&self) -> WeatherForecast {
-        todo!()
-    }
 }
 
 fn eorzea_weather_score(time: EorzeaTime, max_score: u8) -> Result<u8, SystemTimeError> {

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::{
     eorzea_time::{EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan},
@@ -116,27 +116,43 @@ impl<'a> Fish<'a> {
         day.round(EORZEA_SUN);
         let start = day + self.window_start;
         let mut end = day + self.window_end;
-        if end < start {
+        if end <= start {
             end += EORZEA_SUN;
         }
         EorzeaTimeSpan::new_start_end(start, end).unwrap()
     }
 
-    pub fn next_window(&self, time: EorzeaTime, limit: u32) -> Option<EorzeaTimeSpan> {
-        let next_weather = self.location.region.weather.find_pattern(
-            time,
-            &self.previous_weather_set,
-            &self.weather_set,
-            limit,
-        )?;
-        let weather_span = EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
-        match self.window_on_day(time).overlap(&weather_span) {
-            Ok(o) => Some(o),
-            Err(_) => self.next_window(time + EORZEA_WEATHER_PERIOD, limit - 1),
+    pub fn next_window(&self, mut time: EorzeaTime, mut limit: u32) -> Option<EorzeaTimeSpan> {
+        while limit > 0 {
+            let next_weather = self.location.region.weather.find_pattern(
+                time,
+                &self.previous_weather_set,
+                &self.weather_set,
+                limit,
+            )?;
+            let weather_span = EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
+            if let Ok(window) = self.window_on_day(time).overlap(&weather_span) {
+                if window.duration().total_seconds() > 0 {
+                    return Some(window);
+                }
+            }
+            time += EORZEA_WEATHER_PERIOD;
+            limit -= 1;
         }
+        None
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn start(&self) -> &EorzeaDuration {
+        &self.window_start
+    }
+
+    pub fn weather_now(&self) -> &Weather {
+        self.location
+            .region
+            .weather
+            .weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap())
     }
 }
 
@@ -238,5 +254,44 @@ mod tests {
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 3, 7, 30, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 8, 0, 0).unwrap());
+    }
+
+    #[test]
+    pub fn next_window_day_border() {
+        let weather = WeatherForecast::new(
+            "Region".to_string(),
+            vec![(50, Weather::Clouds), (100, Weather::Sunny)],
+        );
+        let fishing_hole = FishingHole {
+            name: "Fishing Hole".to_string(),
+            region: &Region {
+                name: "Region".to_string(),
+                weather: &weather,
+            },
+        };
+        let fish = Fish {
+            name: "".to_string(),
+            location: &fishing_hole,
+            window_start: EorzeaDuration::new(23, 30, 0).unwrap(),
+            window_end: EorzeaDuration::new(1, 0, 0).unwrap(),
+            bait: Bait::Bait("Bait".to_string()),
+            previous_weather_set: vec![Weather::Clouds],
+            weather_set: vec![Weather::Clouds],
+            tug: Tug::Light,
+            hookset: Hookset::Precision,
+            snagging: false,
+            gig: false,
+            folklore: false,
+            fish_eyes: false,
+            patch: (7, 0),
+            intuition: None,
+            lure: Lure::Moderate,
+            lure_proc: false,
+        };
+        let result = fish
+            .next_window(EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap(), 1_000)
+            .unwrap();
+        assert_eq!(result.start(), EorzeaTime::new(1, 1, 4, 23, 30, 0).unwrap());
+        assert_eq!(result.end(), EorzeaTime::new(1, 1, 5, 0, 0, 0).unwrap());
     }
 }

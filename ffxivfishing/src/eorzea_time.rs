@@ -19,6 +19,10 @@ pub const BELL_IN_ESEC: u64 = 60 * MINUTE_IN_ESEC;
 pub const MINUTE_IN_ESEC: u64 = 60;
 
 pub const EORZEA_ZERO_TIME: EorzeaTime = EorzeaTime { timestamp: 0 };
+pub const EORZEA_ZERO_TIMESPAN: EorzeaTimeSpan = EorzeaTimeSpan {
+    start: EORZEA_ZERO_TIME,
+    duration: EorzeaDuration { esec: 0 },
+};
 
 #[derive(Debug, PartialEq, Clone, Copy, PartialOrd, Eq, Ord)]
 pub struct EorzeaTime {
@@ -193,6 +197,10 @@ impl EorzeaDuration {
         EorzeaDuration { esec }
     }
 
+    pub fn total_seconds(&self) -> u64 {
+        self.esec
+    }
+
     pub fn year(&self) -> u16 {
         (1 + self.esec / YEAR_IN_ESEC) as u16
     }
@@ -250,6 +258,23 @@ impl EorzeaTimeSpan {
         let max_start = max(self.start, other.start);
         let min_end = min(self.end(), other.end());
         EorzeaTimeSpan::new_start_end(max_start, min_end)
+    }
+}
+impl std::fmt::Display for EorzeaDuration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:0>2}:{:0>2}:{:0>2}",
+            self.esec / BELL_IN_ESEC,
+            (self.esec % BELL_IN_ESEC) / MINUTE_IN_ESEC,
+            self.esec % MINUTE_IN_ESEC
+        )
+    }
+}
+
+impl std::fmt::Display for EorzeaTimeSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} for {}", self.start, self.duration)
     }
 }
 
@@ -344,6 +369,7 @@ mod tests {
             MOON_IN_ESEC,
             YEAR_IN_ESEC,
             YEAR_IN_ESEC * 1000 - 10,
+            2000 * YEAR_IN_ESEC - 1,
         ];
         for sec in scenarios {
             let time = SystemTime::UNIX_EPOCH + Duration::from_secs(sec);
