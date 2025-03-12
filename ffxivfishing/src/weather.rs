@@ -2,7 +2,7 @@ use std::time::{SystemTimeError, UNIX_EPOCH};
 
 use crate::eorzea_time::{EORZEA_WEATHER_PERIOD, EorzeaTime};
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Weather {
     Unknown,
     Id(u32),
@@ -14,7 +14,7 @@ pub enum Weather {
     Wind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WeatherForecast {
     region: String,
     weather_rates: Vec<(u8, Weather)>,

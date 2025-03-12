@@ -1,20 +1,23 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 
 use crate::{
     eorzea_time::{EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan},
     weather::{Weather, WeatherForecast},
 };
 
-#[derive(Debug)]
-pub struct Region<'a> {
+#[derive(Debug, Clone)]
+pub struct Region {
     name: String,
-    weather: &'a WeatherForecast,
+    weather: WeatherForecast,
 }
 
 #[derive(Debug)]
-pub struct FishingHole<'a> {
+pub struct FishingHole {
     name: String,
-    region: &'a Region<'a>,
+    region: Rc<Region>,
 }
 
 #[derive(Debug)]
@@ -22,18 +25,40 @@ pub enum Tug {
     Light,
     Medium,
     Heavy,
+    Unknown,
+}
+
+impl From<&str> for Tug {
+    fn from(value: &str) -> Self {
+        match value.to_lowercase().as_str() {
+            "light" => Tug::Light,
+            "medium" => Tug::Medium,
+            "heavy" => Tug::Heavy,
+            _ => Tug::Unknown,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum Hookset {
     Precision,
     Powerful,
+    Unknown,
+}
+impl From<&str> for Hookset {
+    fn from(value: &str) -> Self {
+        match value.to_lowercase().as_str() {
+            "precision" => Hookset::Precision,
+            "powerful" => Hookset::Powerful,
+            _ => Hookset::Unknown,
+        }
+    }
 }
 
 #[derive(Debug)]
-pub enum Bait<'a> {
-    Mooch(&'a Fish<'a>),
-    Bait(String),
+pub enum Bait {
+    Mooch(u32),
+    Bait(u32),
 }
 
 #[derive(Debug)]
@@ -51,10 +76,10 @@ pub enum Lure {
 #[derive(Debug)]
 pub struct Fish<'a> {
     name: String,
-    location: &'a FishingHole<'a>,
+    location: Rc<FishingHole>,
     window_start: EorzeaDuration,
     window_end: EorzeaDuration,
-    bait: Bait<'a>,
+    bait: Bait,
     previous_weather_set: Vec<Weather>,
     weather_set: Vec<Weather>,
     tug: Tug,
@@ -73,10 +98,10 @@ impl<'a> Fish<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
-        location: &'a FishingHole<'a>,
+        location: Rc<FishingHole>,
         window_start: EorzeaDuration,
         window_end: EorzeaDuration,
-        bait: Bait<'a>,
+        bait: Bait,
         previous_weather_set: Vec<Weather>,
         weather_set: Vec<Weather>,
         tug: Tug,
@@ -157,8 +182,8 @@ impl<'a> Fish<'a> {
     }
 }
 
-impl FishingHole<'_> {
-    pub fn new<'a>(name: String, region: &'a Region) -> FishingHole<'a> {
+impl FishingHole {
+    pub fn new(name: String, region: Rc<Region>) -> FishingHole {
         FishingHole { name, region }
     }
     pub fn name(&self) -> &str {
@@ -166,12 +191,32 @@ impl FishingHole<'_> {
     }
 }
 
-impl Region<'_> {
-    pub fn new(name: String, weather: &WeatherForecast) -> Region<'_> {
+impl Region {
+    pub fn new(name: String, weather: WeatherForecast) -> Region {
         Region { name, weather }
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+
+pub struct FishData<'a> {
+    fishes: Vec<Fish<'a>>,
+    fishing_holes: Vec<Rc<FishingHole>>,
+    regions: Vec<Rc<Region>>,
+}
+
+impl FishData<'_> {
+    pub fn new<'a>(
+        fishes: Vec<Fish<'a>>,
+        fishing_holes: Vec<Rc<FishingHole>>,
+        regions: Vec<Rc<Region>>,
+    ) -> FishData<'a> {
+        FishData {
+            fishes,
+            fishing_holes,
+            regions,
+        }
     }
 }
 
@@ -187,17 +232,17 @@ mod tests {
         );
         let fishing_hole = FishingHole {
             name: "Fishing Hole".to_string(),
-            region: &Region {
+            region: Rc::new(Region {
                 name: "Region".to_string(),
-                weather: &weather,
-            },
+                weather,
+            }),
         };
         let fish = Fish {
             name: "".to_string(),
-            location: &fishing_hole,
+            location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(1, 0, 0).unwrap(),
             window_end: EorzeaDuration::new(2, 0, 0).unwrap(),
-            bait: Bait::Bait("Bait".to_string()),
+            bait: Bait::Bait(0),
             previous_weather_set: vec![Weather::Clouds],
             weather_set: vec![Weather::Clouds],
             tug: Tug::Light,
@@ -226,17 +271,17 @@ mod tests {
         );
         let fishing_hole = FishingHole {
             name: "Fishing Hole".to_string(),
-            region: &Region {
+            region: Rc::new(Region {
                 name: "Region".to_string(),
-                weather: &weather,
-            },
+                weather,
+            }),
         };
         let fish = Fish {
             name: "".to_string(),
-            location: &fishing_hole,
+            location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(7, 30, 0).unwrap(),
             window_end: EorzeaDuration::new(8, 30, 0).unwrap(),
-            bait: Bait::Bait("Bait".to_string()),
+            bait: Bait::Bait(0),
             previous_weather_set: vec![Weather::Clouds],
             weather_set: vec![Weather::Clouds],
             tug: Tug::Light,
@@ -265,17 +310,17 @@ mod tests {
         );
         let fishing_hole = FishingHole {
             name: "Fishing Hole".to_string(),
-            region: &Region {
+            region: Rc::new(Region {
                 name: "Region".to_string(),
-                weather: &weather,
-            },
+                weather,
+            }),
         };
         let fish = Fish {
             name: "".to_string(),
-            location: &fishing_hole,
+            location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(23, 30, 0).unwrap(),
             window_end: EorzeaDuration::new(1, 0, 0).unwrap(),
-            bait: Bait::Bait("Bait".to_string()),
+            bait: Bait::Bait(0),
             previous_weather_set: vec![Weather::Clouds],
             weather_set: vec![Weather::Clouds],
             tug: Tug::Light,

@@ -3,9 +3,6 @@ name = "ffxivfishing"
 version = "0.1.0"
 edition = "2024"
 
-[dev-dependencies]
-chrono = "0.4"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
-json = "0.12.4"

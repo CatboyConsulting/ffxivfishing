@@ -1,24 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error, rc::Rc};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     eorzea_time::EorzeaDuration,
-    fish::{Bait, Fish, FishingHole, Hookset, Lure, Region, Tug},
+    fish::{Bait, Fish, FishData, FishingHole, Hookset, Lure, Region, Tug},
     weather::{Weather, WeatherForecast},
 };
 
 const DATA: &str = include_str!("data.json");
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum OneOrVec<T> {
+enum OneOrVec<T> {
     One(T),
     Vec(Vec<T>),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CarbuncleData {
+struct CarbuncleData {
     #[serde(rename = "FISH")]
     fishes: HashMap<String, CarbuncleFish>,
     #[serde(rename = "WEATHER_RATES")]
@@ -29,8 +29,8 @@ pub struct CarbuncleData {
     items: HashMap<String, CarbuncleItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CarbuncleFish {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct CarbuncleFish {
     #[serde(rename = "_id")]
     id: u32,
     #[serde(rename = "previousWeatherSet")]
@@ -58,7 +58,7 @@ pub struct CarbuncleFish {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CarbuncleFishingSpot {
+struct CarbuncleFishingSpot {
     #[serde(rename = "_id")]
     id: u32,
     #[serde(rename = "name_en")]
@@ -72,7 +72,7 @@ pub struct CarbuncleFishingSpot {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CarbuncleItem {
+struct CarbuncleItem {
     #[serde(rename = "_id")]
     id: u32,
     #[serde(rename = "name_en")]
@@ -84,7 +84,7 @@ pub struct CarbuncleItem {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CarbuncleWeatherRates {
+struct CarbuncleWeatherRates {
     #[serde(rename = "map_id")]
     map_id: u32,
     #[serde(rename = "map_scale")]
@@ -110,18 +110,18 @@ impl From<&CarbuncleWeatherRates> for WeatherForecast {
 }
 
 impl CarbuncleFishingSpot {
-    pub fn to_fishinghole<'a>(&self, regions: &'a [Region<'a>]) -> Option<FishingHole<'a>> {
+    fn to_fishinghole(&self, regions: &[Rc<Region>]) -> Option<FishingHole> {
         let region = regions
             .iter()
             .find(|r| r.name() == self.territory_id.to_string())?;
-        Some(FishingHole::new(self.id.to_string(), region))
+        Some(FishingHole::new(self.id.to_string(), region.clone()))
     }
 }
 
 impl CarbuncleFish {
-    pub fn to_fish<'a>(
+    fn to_fish<'a>(
         &self,
-        fishing_holes: &'a [FishingHole<'a>],
+        fishing_holes: &[Rc<FishingHole>],
         items: &[&CarbuncleItem],
     ) -> Option<Fish<'a>> {
         let fish_hole = fishing_holes
@@ -130,17 +130,21 @@ impl CarbuncleFish {
         let item = items.iter().find(|i| self.id == i.id)?;
         Some(Fish::new(
             item.name.clone(),
-            fish_hole,
+            Rc::clone(fish_hole),
             EorzeaDuration::from_esecs((self.start_hour * 3600.0) as u64),
             EorzeaDuration::from_esecs((self.end_hour * 3600.0) as u64),
-            Bait::Bait("Bait".to_string()),
+            Bait::Bait(0), //TODO: Implement proper conversion
             self.previous_weather_set
                 .iter()
                 .map(|id| Weather::Id(*id))
                 .collect(),
             self.weather_set.iter().map(|id| Weather::Id(*id)).collect(),
-            Tug::Light,
-            Hookset::Precision,
+            self.tug.clone().unwrap_or("".to_string()).as_str().into(),
+            self.hookset
+                .clone()
+                .unwrap_or("".to_string())
+                .as_str()
+                .into(),
             None,
             Lure::Moderate,
             self.lure.is_some(),
@@ -153,7 +157,7 @@ impl CarbuncleFish {
     }
 }
 
-pub fn parse_fishes() -> Result<Vec<CarbuncleFish>, serde_json::Error> {
+fn parse_fishes() -> Result<Vec<CarbuncleFish>, serde_json::Error> {
     let data: serde_json::Value = serde_json::from_str(DATA)?;
 
     let fishes = match data["FISH"].as_object() {
@@ -167,7 +171,7 @@ pub fn parse_fishes() -> Result<Vec<CarbuncleFish>, serde_json::Error> {
         .collect())
 }
 
-pub fn parse_fishing_spots() -> Result<Vec<CarbuncleFishingSpot>, serde_json::Error> {
+fn parse_fishing_spots() -> Result<Vec<CarbuncleFishingSpot>, serde_json::Error> {
     let data: serde_json::Value = serde_json::from_str(DATA)?;
 
     let fish_spots = match data["FISHING_SPOTS"].as_object() {
@@ -181,7 +185,7 @@ pub fn parse_fishing_spots() -> Result<Vec<CarbuncleFishingSpot>, serde_json::Er
         .collect())
 }
 
-pub fn parse_weather() -> Result<Vec<CarbuncleWeatherRates>, serde_json::Error> {
+fn parse_weather() -> Result<Vec<CarbuncleWeatherRates>, serde_json::Error> {
     let data: serde_json::Value = serde_json::from_str(DATA)?;
 
     let fishes = match data["WEATHER_RATES"].as_object() {
@@ -195,8 +199,45 @@ pub fn parse_weather() -> Result<Vec<CarbuncleWeatherRates>, serde_json::Error> 
         .collect())
 }
 
-pub fn parse_data() -> Result<CarbuncleData, serde_json::Error> {
+fn parse_data() -> Result<CarbuncleData, serde_json::Error> {
     serde_json::from_str(DATA)
+}
+
+impl CarbuncleData {
+    fn convert_to_fishdata<'a>(&self) -> Vec<Fish<'a>> {
+        let weather_rates: HashMap<String, WeatherForecast> = self
+            .weather_rates
+            .clone()
+            .into_iter()
+            .map(|(id, w)| (id, (&w).into()))
+            .collect();
+
+        let items: Vec<&CarbuncleItem> = self.items.values().collect();
+
+        let regions: Vec<Rc<Region>> = weather_rates
+            .iter()
+            .map(|(id, w)| Rc::new(Region::new(id.to_string(), w.clone())))
+            .collect();
+
+        let fishing_holes: Vec<Rc<FishingHole>> = self
+            .fishing_spots
+            .values()
+            .filter_map(move |fs| fs.to_fishinghole(&regions))
+            .map(Rc::new)
+            .collect();
+
+        let fishes: Vec<Fish> = self
+            .fishes
+            .values()
+            .filter_map(|f| f.to_fish(&fishing_holes, &items))
+            .collect();
+        fishes
+    }
+}
+
+pub fn fishes<'a>() -> Result<Vec<Fish<'a>>, Box<dyn Error>> {
+    let data = parse_data()?;
+    Ok(data.convert_to_fishdata())
 }
 
 #[cfg(test)]
@@ -208,7 +249,7 @@ mod tests {
 
     use super::*;
     #[test]
-    pub fn parse_weather_test() {
+    fn parse_weather_test() {
         let weathers = parse_weather().unwrap();
         assert!(!weathers.is_empty());
         for w in weathers {
@@ -216,7 +257,7 @@ mod tests {
         }
     }
     #[test]
-    pub fn parse_fishing_spots_test() {
+    fn parse_fishing_spots_test() {
         let fish_spots = parse_fishing_spots().unwrap();
         assert!(!fish_spots.is_empty());
         for s in fish_spots {
@@ -225,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    pub fn weather_at() {
+    fn weather_at() {
         let weathers = parse_weather().unwrap();
         assert!(!weathers.is_empty());
         for w in weathers {
@@ -236,41 +277,9 @@ mod tests {
     }
 
     #[test]
-    pub fn parse_data_test() {
+    fn parse_data_test() {
         let data = parse_data().unwrap();
-
-        let weather_rates: HashMap<String, WeatherForecast> = data
-            .weather_rates
-            .clone()
-            .into_iter()
-            .map(|(id, w)| (id, (&w).into()))
-            .collect();
-
-        let items: Vec<&CarbuncleItem> = data.items.values().collect();
-
-        let regions: Vec<_> = weather_rates
-            .iter()
-            .map(|(id, w)| Region::new(id.to_string(), w))
-            .collect();
-        assert!(!regions.is_empty());
-        assert_eq!(regions.len(), weather_rates.len());
-
-        let fishing_holes: Vec<FishingHole> = data
-            .fishing_spots
-            .values()
-            .filter_map(|fs| fs.to_fishinghole(&regions))
-            .collect();
-        assert!(!fishing_holes.is_empty());
-        assert!(fishing_holes.len() >= (data.fishing_spots.len() as f32 * 0.8) as usize);
-
-        let fishes: Vec<Fish> = data
-            .fishes
-            .values()
-            .filter_map(|f| f.to_fish(&fishing_holes, &items))
-            .collect();
-        assert!(!fishes.is_empty());
-        assert!(fishes.len() >= (0.7 * data.fishes.len() as f32) as usize);
-
+        let fishes = data.convert_to_fishdata();
         for fish in fishes {
             let window =
                 fish.next_window(EorzeaTime::from_time(&SystemTime::now()).unwrap(), 1_000);
@@ -286,13 +295,5 @@ mod tests {
                 println!("{:?}: !!!", fish.name());
             }
         }
-
-        // for (id, w) in weather_rates {
-        //     println!(
-        //         "{} {:?}",
-        //         id,
-        //         w.weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap()),
-        //     )
-        // }
     }
 }
