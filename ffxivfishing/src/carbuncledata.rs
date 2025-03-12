@@ -1,10 +1,10 @@
-use std::{collections::HashMap, error::Error, rc::Rc};
+use std::{collections::HashMap, error::Error, rc::Rc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     eorzea_time::EorzeaDuration,
-    fish::{Bait, Fish, FishData, FishingHole, Hookset, Lure, Region, Tug},
+    fish::{Bait, Fish, FishData, FishingHole, FishingItem, Intuition, Lure, Region},
     weather::{Weather, WeatherForecast},
 };
 
@@ -47,12 +47,20 @@ struct CarbuncleFish {
     location: Option<u32>,
     #[serde(rename = "intuitionLength")]
     intuition_length: Option<u32>,
+    #[serde(rename = "predators")]
+    predators: Vec<[u32; 2]>,
     #[serde(rename = "tug")]
     tug: Option<String>,
     #[serde(rename = "hookset")]
     hookset: Option<String>,
     #[serde(rename = "lure")]
     lure: Option<String>,
+    #[serde(rename = "fishEyes")]
+    fish_eyes: bool,
+    #[serde(rename = "bigFish")]
+    bg_fish: bool,
+    #[serde(rename = "snagging")]
+    snagging: Option<bool>,
     #[serde(rename = "patch")]
     patch: f32,
 }
@@ -81,6 +89,14 @@ struct CarbuncleItem {
     icon: String,
     #[serde(rename = "ilvl")]
     ilvl: u32,
+}
+impl CarbuncleItem {
+    fn to_fishing_item(&self, fishes: &[Fish]) -> FishingItem {
+        match fishes.iter().find(|f| f.id == self.id) {
+            Some(f) => FishingItem::Fish(self.name.clone(), f.id),
+            None => FishingItem::Bait(self.name.clone(), self.id),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -119,21 +135,34 @@ impl CarbuncleFishingSpot {
 }
 
 impl CarbuncleFish {
-    fn to_fish<'a>(
-        &self,
-        fishing_holes: &[Rc<FishingHole>],
-        items: &[&CarbuncleItem],
-    ) -> Option<Fish<'a>> {
+    fn try_get_intuition(&self) -> Option<Intuition> {
+        self.intuition_length.map(|l| {
+            Intuition::new(
+                Duration::from_secs(l as u64),
+                self.predators.iter().map(|p| (p[1] as u8, p[0])).collect(),
+            )
+        })
+    }
+
+    fn to_fish(&self, fishing_holes: &[Rc<FishingHole>], items: &[&CarbuncleItem]) -> Option<Fish> {
         let fish_hole = fishing_holes
             .iter()
             .find(|fh| fh.name() == self.location.unwrap_or(0).to_string())?;
         let item = items.iter().find(|i| self.id == i.id)?;
+
+        let bait = match self.best_catch_path.last() {
+            Some(OneOrVec::One(o)) => Bait::Bait(*o),
+            Some(OneOrVec::Vec(o)) if o.is_empty() => Bait::Unknown,
+            Some(OneOrVec::Vec(o)) => Bait::Bait(*o.last().unwrap()),
+            None => Bait::Unknown,
+        };
         Some(Fish::new(
+            self.id,
             item.name.clone(),
             Rc::clone(fish_hole),
             EorzeaDuration::from_esecs((self.start_hour * 3600.0) as u64),
             EorzeaDuration::from_esecs((self.end_hour * 3600.0) as u64),
-            Bait::Bait(0), //TODO: Implement proper conversion
+            bait,
             self.previous_weather_set
                 .iter()
                 .map(|id| Weather::Id(*id))
@@ -145,13 +174,13 @@ impl CarbuncleFish {
                 .unwrap_or("".to_string())
                 .as_str()
                 .into(),
-            None,
+            self.try_get_intuition(),
             Lure::Moderate,
             self.lure.is_some(),
+            self.snagging.unwrap_or(false),
             false,
             false,
-            false,
-            false,
+            self.fish_eyes,
             (self.patch.trunc() as u8, self.patch.fract() as u8),
         ))
     }
@@ -204,7 +233,7 @@ fn parse_data() -> Result<CarbuncleData, serde_json::Error> {
 }
 
 impl CarbuncleData {
-    fn convert_to_fishdata<'a>(&self) -> Vec<Fish<'a>> {
+    fn convert_to_fishdata(&self) -> FishData {
         let weather_rates: HashMap<String, WeatherForecast> = self
             .weather_rates
             .clone()
@@ -222,7 +251,7 @@ impl CarbuncleData {
         let fishing_holes: Vec<Rc<FishingHole>> = self
             .fishing_spots
             .values()
-            .filter_map(move |fs| fs.to_fishinghole(&regions))
+            .filter_map(|fs| fs.to_fishinghole(&regions))
             .map(Rc::new)
             .collect();
 
@@ -231,11 +260,15 @@ impl CarbuncleData {
             .values()
             .filter_map(|f| f.to_fish(&fishing_holes, &items))
             .collect();
-        fishes
+        let fishing_items = items
+            .iter()
+            .map(|item| item.to_fishing_item(&fishes))
+            .collect();
+        FishData::new(fishes, fishing_holes, regions, fishing_items)
     }
 }
 
-pub fn fishes<'a>() -> Result<Vec<Fish<'a>>, Box<dyn Error>> {
+pub fn carbuncle_fishes() -> Result<FishData, Box<dyn Error>> {
     let data = parse_data()?;
     Ok(data.convert_to_fishdata())
 }
@@ -280,7 +313,7 @@ mod tests {
     fn parse_data_test() {
         let data = parse_data().unwrap();
         let fishes = data.convert_to_fishdata();
-        for fish in fishes {
+        for fish in fishes.fishes() {
             let window =
                 fish.next_window(EorzeaTime::from_time(&SystemTime::now()).unwrap(), 1_000);
             if window.is_some() {

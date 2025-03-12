@@ -59,12 +59,21 @@ impl From<&str> for Hookset {
 pub enum Bait {
     Mooch(u32),
     Bait(u32),
+    Unknown,
 }
 
 #[derive(Debug)]
-pub struct Intuition<'a> {
+pub struct Intuition {
     length: Duration,
-    requirements: Vec<(u8, &'a Fish<'a>)>,
+    requirements: Vec<(u8, u32)>,
+}
+impl Intuition {
+    pub(crate) fn new<'a>(length: Duration, requirements: Vec<(u8, u32)>) -> Self {
+        Self {
+            length,
+            requirements,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,7 +83,8 @@ pub enum Lure {
 }
 
 #[derive(Debug)]
-pub struct Fish<'a> {
+pub struct Fish {
+    pub id: u32,
     name: String,
     location: Rc<FishingHole>,
     window_start: EorzeaDuration,
@@ -84,7 +94,7 @@ pub struct Fish<'a> {
     weather_set: Vec<Weather>,
     tug: Tug,
     hookset: Hookset,
-    intuition: Option<Intuition<'a>>,
+    intuition: Option<Intuition>,
     lure: Lure,
     lure_proc: bool,
     snagging: bool,
@@ -94,9 +104,10 @@ pub struct Fish<'a> {
     patch: (u8, u8),
 }
 
-impl<'a> Fish<'a> {
+impl Fish {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        id: u32,
         name: String,
         location: Rc<FishingHole>,
         window_start: EorzeaDuration,
@@ -106,7 +117,7 @@ impl<'a> Fish<'a> {
         weather_set: Vec<Weather>,
         tug: Tug,
         hookset: Hookset,
-        intuition: Option<Intuition<'a>>,
+        intuition: Option<Intuition>,
         lure: Lure,
         lure_proc: bool,
         snagging: bool,
@@ -114,8 +125,9 @@ impl<'a> Fish<'a> {
         folklore: bool,
         fish_eyes: bool,
         patch: (u8, u8),
-    ) -> Fish<'a> {
+    ) -> Fish {
         Self {
+            id,
             name,
             location,
             window_start: window_start % EORZEA_SUN,
@@ -200,23 +212,52 @@ impl Region {
     }
 }
 
-pub struct FishData<'a> {
-    fishes: Vec<Fish<'a>>,
-    fishing_holes: Vec<Rc<FishingHole>>,
-    regions: Vec<Rc<Region>>,
+pub enum FishingItem {
+    Fish(String, u32),
+    Bait(String, u32),
+}
+impl FishingItem {
+    pub fn name(&self) -> &str {
+        match self {
+            FishingItem::Fish(name, _) => name,
+            FishingItem::Bait(name, _) => name,
+        }
+    }
+    pub fn id(&self) -> u32 {
+        match self {
+            FishingItem::Fish(_, id) => *id,
+            FishingItem::Bait(_, id) => *id,
+        }
+    }
 }
 
-impl FishData<'_> {
-    pub fn new<'a>(
-        fishes: Vec<Fish<'a>>,
+pub struct FishData {
+    fishes: Vec<Fish>,
+    fishing_holes: Vec<Rc<FishingHole>>,
+    regions: Vec<Rc<Region>>,
+    items: Vec<FishingItem>,
+}
+
+impl FishData {
+    pub fn new(
+        fishes: Vec<Fish>,
         fishing_holes: Vec<Rc<FishingHole>>,
         regions: Vec<Rc<Region>>,
-    ) -> FishData<'a> {
+        items: Vec<FishingItem>,
+    ) -> FishData {
         FishData {
             fishes,
             fishing_holes,
             regions,
+            items,
         }
+    }
+    pub fn item_by_id(&self, id: u32) -> Option<&FishingItem> {
+        self.items.iter().find(|item| item.id() == id)
+    }
+
+    pub fn fishes(&self) -> &[Fish] {
+        &self.fishes
     }
 }
 
@@ -238,6 +279,7 @@ mod tests {
             }),
         };
         let fish = Fish {
+            id: 0,
             name: "".to_string(),
             location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(1, 0, 0).unwrap(),
@@ -277,6 +319,7 @@ mod tests {
             }),
         };
         let fish = Fish {
+            id: 0,
             name: "".to_string(),
             location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(7, 30, 0).unwrap(),
@@ -316,6 +359,7 @@ mod tests {
             }),
         };
         let fish = Fish {
+            id: 0,
             name: "".to_string(),
             location: Rc::new(fishing_hole),
             window_start: EorzeaDuration::new(23, 30, 0).unwrap(),

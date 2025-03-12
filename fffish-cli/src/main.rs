@@ -1,11 +1,11 @@
 use std::time::SystemTime;
 
 use chrono::Local;
-use ffxivfishing::{carbuncledata::fishes, eorzea_time::EorzeaTime};
+use ffxivfishing::{carbuncledata::carbuncle_fishes, eorzea_time::EorzeaTime};
 
 fn main() {
-    let fishes = fishes().expect("Parsing the fish data failed");
-    for f in fishes {
+    let data = carbuncle_fishes().expect("Parsing the fish data failed");
+    for f in data.fishes() {
         if let Some(next_window) =
             f.next_window(EorzeaTime::from_time(&SystemTime::now()).expect("F"), 1_000)
         {
