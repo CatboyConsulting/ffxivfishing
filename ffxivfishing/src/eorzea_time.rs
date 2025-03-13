@@ -89,6 +89,10 @@ impl EorzeaTime {
         }
     }
 
+    pub fn now() -> EorzeaTime {
+        EorzeaTime::from_time(&SystemTime::now()).unwrap()
+    }
+
     pub fn from_time(time: &SystemTime) -> Result<EorzeaTime, SystemTimeError> {
         let eorzea_time = (time.duration_since(UNIX_EPOCH)?.as_secs() as f64) * EORZEA_TIME_CONST;
         Ok(EorzeaTime {

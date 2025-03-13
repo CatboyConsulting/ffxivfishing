@@ -219,7 +219,7 @@ impl Region {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FishingItem {
     Fish(String, u32),
     Bait(String, u32),

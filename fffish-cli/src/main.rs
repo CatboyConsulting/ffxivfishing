@@ -2,7 +2,7 @@ use std::time::SystemTime;
 
 use chrono::Local;
 use color_eyre::Result;
-use crossterm::event::{self, Event};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
     eorzea_time::EorzeaTime,
@@ -14,16 +14,18 @@ use ratatui::{
     layout::Rect,
     style::Style,
     text::Line,
-    widgets::{List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 fn main() -> Result<()> {
     color_eyre::install()?;
     let terminal = ratatui::init();
-    let app = App {
+    let mut app = App {
         fish_data: carbuncle_fishes().expect("Parsing the fish data failed"),
         state: ListState::default(),
+        item_cache: vec![],
     };
+    app.state.select_first();
 
     let result = app.run(terminal);
     ratatui::restore();
@@ -32,46 +34,77 @@ fn main() -> Result<()> {
 
 struct App {
     fish_data: FishData,
+    item_cache: Vec<FishListItem>,
     state: ListState,
 }
 impl App {
     fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         loop {
-            terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
-            if matches!(event::read()?, Event::Key(_)) {
-                break Ok(());
+            if self.item_cache.is_empty() {
+                self.item_cache = self
+                    .fish_data
+                    .fishes()
+                    .iter()
+                    .map(|f| FishListItem {
+                        name: f.name().to_string(),
+                        id: f.id,
+                        bait: self
+                            .fish_data
+                            .item_by_id(f.bait_id().unwrap())
+                            .map(|i| i.clone()),
+                        next_window: f
+                            .next_window(EorzeaTime::now(), 1_000)
+                            .unwrap()
+                            .start()
+                            .to_system_time()
+                            .into(),
+                    })
+                    .collect();
             }
+            terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
+            if let Event::Key(e) = event::read()? {
+                if e.code == KeyCode::Char('q') {
+                    break Ok(());
+                }
+                self.handle_key(e)
+            }
+        }
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) {
+        if key.kind != KeyEventKind::Press {
+            return;
+        }
+        match key.code {
+            KeyCode::Char('j') => self.state.select_next(),
+            KeyCode::Char('k') => self.state.select_previous(),
+            _ => {}
         }
     }
 }
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let l: Vec<ListItem> = self
-            .fish_data
-            .fishes()
-            .iter()
-            .map(|f| {
-                ListItem::from(&FishListItem {
-                    name: f.name().to_string(),
-                    id: f.id,
-                    bait: self.fish_data.item_by_id(f.bait_id().unwrap()),
-                    next_window: chrono::Local::now(),
-                })
-            })
-            .collect();
-        StatefulWidget::render(List::new(l), area, buf, &mut self.state);
+        let items: Vec<ListItem> = self.item_cache.iter().map(ListItem::from).collect();
+        let block = Block::new().borders(Borders::TOP);
+        StatefulWidget::render(
+            List::new(items).block(block).highlight_symbol("> "),
+            area,
+            buf,
+            &mut self.state,
+        );
     }
 }
 
-struct FishListItem<'a> {
+#[derive(Clone)]
+struct FishListItem {
     name: String,
     id: u32,
-    bait: Option<&'a FishingItem>,
+    bait: Option<FishingItem>,
     next_window: chrono::DateTime<Local>,
 }
 
-impl From<&FishListItem<'_>> for ListItem<'_> {
+impl From<&FishListItem> for ListItem<'_> {
     fn from(value: &FishListItem) -> Self {
         let line = Line::styled(
             format!(
@@ -79,7 +112,7 @@ impl From<&FishListItem<'_>> for ListItem<'_> {
                 value.id,
                 value.name,
                 value.next_window.format("%Y-%m-%d %H:%M:%S"),
-                value.bait.unwrap().name()
+                value.bait.clone().unwrap().name()
             ),
             Style::new(),
         );
