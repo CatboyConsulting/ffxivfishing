@@ -1,20 +1,20 @@
-use std::time::SystemTime;
-
 use chrono::Local;
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
-    eorzea_time::EorzeaTime,
+    eorzea_time::{EORZEA_ZERO_TIME, EorzeaTime},
     fish::{Fish, FishData, FishingItem},
 };
 use ratatui::{
-    DefaultTerminal, Frame,
+    DefaultTerminal,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Layout, Rect},
     style::Style,
     text::Line,
-    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{
+        Block, Borders, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget,
+    },
 };
 
 fn main() -> Result<()> {
@@ -48,10 +48,7 @@ impl App {
                     .map(|f| FishListItem {
                         name: f.name().to_string(),
                         id: f.id,
-                        bait: self
-                            .fish_data
-                            .item_by_id(f.bait_id().unwrap())
-                            .map(|i| i.clone()),
+                        bait: self.fish_data.item_by_id(f.bait_id().unwrap()).cloned(),
                         next_window: f
                             .next_window(EorzeaTime::now(), 1_000)
                             .unwrap()
@@ -60,6 +57,7 @@ impl App {
                             .into(),
                     })
                     .collect();
+                self.item_cache.sort_by_key(|f| f.id);
             }
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
             if let Event::Key(e) = event::read()? {
@@ -71,6 +69,52 @@ impl App {
         }
     }
 
+    fn render_info(&mut self, area: Rect, buf: &mut Buffer) {
+        let areas = Layout::default()
+            .constraints([Constraint::Min(1); 9])
+            .vertical_margin(1)
+            .split(area);
+        let item = self.get_selected_fish();
+        let bait_text = format!(
+            "Bait: {}",
+            item.bait.as_ref().map(|i| i.name()).unwrap_or("")
+        );
+        let window_text = format!(
+            "Window: {}",
+            self.fish_data
+                .fish_by_id(item.id)
+                .map(|fish| fish.time_restriction())
+                .map(|(s, e)| format!("{} - {}", s, e))
+                .unwrap_or("".to_string())
+        );
+
+        let border_block = Block::new()
+            .borders(Borders::ALL)
+            .title(format!(" {} ", item.name.clone()))
+            .padding(Padding::new(5, 0, 0, 0));
+        border_block.render(area, buf);
+
+        let paragraph_block = Block::new().padding(Padding::new(3, 0, 1, 0));
+
+        Paragraph::new(window_text)
+            .block(paragraph_block.clone())
+            .render(areas[0], buf);
+        Paragraph::new(bait_text)
+            .block(paragraph_block.clone())
+            .render(areas[1], buf);
+    }
+
+    fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
+        let items: Vec<ListItem> = self.item_cache.iter().map(ListItem::from).collect();
+        let block = Block::new().borders(Borders::LEFT);
+        StatefulWidget::render(
+            List::new(items).block(block).highlight_symbol("> "),
+            area,
+            buf,
+            &mut self.state,
+        );
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
             return;
@@ -78,21 +122,23 @@ impl App {
         match key.code {
             KeyCode::Char('j') => self.state.select_next(),
             KeyCode::Char('k') => self.state.select_previous(),
+            KeyCode::Char('g') => self.state.select_first(),
+            KeyCode::Char('G') => self.state.select_last(),
             _ => {}
         }
+    }
+
+    fn get_selected_fish(&self) -> &FishListItem {
+        &self.item_cache[self.state.selected().unwrap()]
     }
 }
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let items: Vec<ListItem> = self.item_cache.iter().map(ListItem::from).collect();
-        let block = Block::new().borders(Borders::TOP);
-        StatefulWidget::render(
-            List::new(items).block(block).highlight_symbol("> "),
-            area,
-            buf,
-            &mut self.state,
-        );
+        let [list_area, info_area] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).areas(area);
+        self.render_list(list_area, buf);
+        self.render_info(info_area, buf);
     }
 }
 
@@ -108,27 +154,13 @@ impl From<&FishListItem> for ListItem<'_> {
     fn from(value: &FishListItem) -> Self {
         let line = Line::styled(
             format!(
-                "{} - {} - {} - {}",
+                "{} - {} - {}",
                 value.id,
                 value.name,
                 value.next_window.format("%Y-%m-%d %H:%M:%S"),
-                value.bait.clone().unwrap().name()
             ),
             Style::new(),
         );
         ListItem::new(line)
-    }
-}
-
-fn print_fish() {
-    let data = carbuncle_fishes().expect("Parsing the fish data failed");
-    for f in data.fishes() {
-        if let Some(next_window) =
-            f.next_window(EorzeaTime::from_time(&SystemTime::now()).expect("F"), 1_000)
-        {
-            let real_time: chrono::DateTime<Local> = next_window.start().to_system_time().into();
-            let bait_id = f.bait_id().unwrap();
-            println!("{}: {} {:?}", f.name(), real_time, data.item_by_id(bait_id));
-        }
     }
 }

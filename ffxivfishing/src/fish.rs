@@ -4,7 +4,10 @@ use std::{
 };
 
 use crate::{
-    eorzea_time::{EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan},
+    eorzea_time::{
+        EORZEA_SUN, EORZEA_WEATHER_PERIOD, EORZEA_ZERO_TIME, EorzeaDuration, EorzeaTime,
+        EorzeaTimeSpan,
+    },
     weather::{Weather, WeatherForecast},
 };
 
@@ -185,6 +188,9 @@ impl Fish {
     pub fn start(&self) -> &EorzeaDuration {
         &self.window_start
     }
+    pub fn time_restriction(&self) -> (&EorzeaDuration, &EorzeaDuration) {
+        (&self.window_start, &self.window_end)
+    }
 
     pub fn weather_now(&self) -> &Weather {
         self.location
@@ -262,6 +268,9 @@ impl FishData {
     }
     pub fn item_by_id(&self, id: u32) -> Option<&FishingItem> {
         self.items.iter().find(|item| item.id() == id)
+    }
+    pub fn fish_by_id(&self, id: u32) -> Option<&Fish> {
+        self.fishes.iter().find(|f| f.id == id)
     }
 
     pub fn fishes(&self) -> &Vec<Fish> {
