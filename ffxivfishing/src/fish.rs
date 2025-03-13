@@ -192,6 +192,13 @@ impl Fish {
             .weather
             .weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap())
     }
+    pub fn bait_id(&self) -> Option<u32> {
+        match self.bait {
+            Bait::Mooch(id) => Some(id),
+            Bait::Bait(id) => Some(id),
+            Bait::Unknown => None,
+        }
+    }
 }
 
 impl FishingHole {
@@ -212,6 +219,7 @@ impl Region {
     }
 }
 
+#[derive(Debug)]
 pub enum FishingItem {
     Fish(String, u32),
     Bait(String, u32),
@@ -256,7 +264,7 @@ impl FishData {
         self.items.iter().find(|item| item.id() == id)
     }
 
-    pub fn fishes(&self) -> &[Fish] {
+    pub fn fishes(&self) -> &Vec<Fish> {
         &self.fishes
     }
 }
