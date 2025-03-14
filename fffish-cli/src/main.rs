@@ -70,38 +70,29 @@ impl App {
     }
 
     fn render_info(&mut self, area: Rect, buf: &mut Buffer) {
-        let areas = Layout::default()
-            .constraints([Constraint::Min(1); 9])
-            .vertical_margin(1)
-            .split(area);
         let item = self.get_selected_fish();
         let bait_text = format!(
             "Bait: {}",
             item.bait.as_ref().map(|i| i.name()).unwrap_or("")
         );
-        let window_text = format!(
-            "Window: {}",
-            self.fish_data
-                .fish_by_id(item.id)
-                .map(|fish| fish.time_restriction())
-                .map(|(s, e)| format!("{} - {}", s, e))
-                .unwrap_or("".to_string())
-        );
+        let fish = self.fish_data.fish_by_id(item.id).unwrap();
+        let (start, end) = fish.time_restriction();
 
         let border_block = Block::new()
             .borders(Borders::ALL)
             .title(format!(" {} ", item.name.clone()))
-            .padding(Padding::new(5, 0, 0, 0));
+            .padding(Padding::new(1, 0, 0, 0));
+
+        let areas = Layout::default()
+            .constraints([Constraint::Max(3); 9])
+            .split(border_block.inner(area));
+
         border_block.render(area, buf);
 
-        let paragraph_block = Block::new().padding(Padding::new(3, 0, 1, 0));
-
-        Paragraph::new(window_text)
-            .block(paragraph_block.clone())
-            .render(areas[0], buf);
-        Paragraph::new(bait_text)
-            .block(paragraph_block.clone())
-            .render(areas[1], buf);
+        Paragraph::new(format!("Window: {} - {}", start, end)).render(areas[0], buf);
+        Paragraph::new(bait_text).render(areas[1], buf);
+        Paragraph::new(format!("Tug: {}", fish.tug)).render(areas[2], buf);
+        Paragraph::new(format!("Hookset: {}", fish.hookset)).render(areas[3], buf);
     }
 
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {

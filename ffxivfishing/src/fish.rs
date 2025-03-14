@@ -1,13 +1,11 @@
 use std::{
+    fmt::Display,
     rc::Rc,
     time::{Duration, SystemTime},
 };
 
 use crate::{
-    eorzea_time::{
-        EORZEA_SUN, EORZEA_WEATHER_PERIOD, EORZEA_ZERO_TIME, EorzeaDuration, EorzeaTime,
-        EorzeaTimeSpan,
-    },
+    eorzea_time::{EORZEA_SUN, EORZEA_WEATHER_PERIOD, EorzeaDuration, EorzeaTime, EorzeaTimeSpan},
     weather::{Weather, WeatherForecast},
 };
 
@@ -42,6 +40,21 @@ impl From<&str> for Tug {
     }
 }
 
+impl Display for Tug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Tug::Light => "!",
+                Tug::Medium => "!!",
+                Tug::Heavy => "!!!",
+                Tug::Unknown => "?",
+            }
+        )
+    }
+}
+
 #[derive(Debug)]
 pub enum Hookset {
     Precision,
@@ -58,6 +71,20 @@ impl From<&str> for Hookset {
     }
 }
 
+impl Display for Hookset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Hookset::Precision => "Precision",
+                Hookset::Powerful => "Powerful",
+                Hookset::Unknown => "Unknown",
+            }
+        )
+    }
+}
+
 #[derive(Debug)]
 pub enum Bait {
     Mooch(u32),
@@ -71,7 +98,7 @@ pub struct Intuition {
     requirements: Vec<(u8, u32)>,
 }
 impl Intuition {
-    pub(crate) fn new<'a>(length: Duration, requirements: Vec<(u8, u32)>) -> Self {
+    pub(crate) fn new(length: Duration, requirements: Vec<(u8, u32)>) -> Self {
         Self {
             length,
             requirements,
@@ -88,23 +115,23 @@ pub enum Lure {
 #[derive(Debug)]
 pub struct Fish {
     pub id: u32,
-    name: String,
-    location: Rc<FishingHole>,
-    window_start: EorzeaDuration,
-    window_end: EorzeaDuration,
-    bait: Bait,
-    previous_weather_set: Vec<Weather>,
-    weather_set: Vec<Weather>,
-    tug: Tug,
-    hookset: Hookset,
-    intuition: Option<Intuition>,
-    lure: Lure,
-    lure_proc: bool,
-    snagging: bool,
-    gig: bool,
-    folklore: bool,
-    fish_eyes: bool,
-    patch: (u8, u8),
+    pub name: String,
+    pub location: Rc<FishingHole>,
+    pub window_start: EorzeaDuration,
+    pub window_end: EorzeaDuration,
+    pub bait: Bait,
+    pub previous_weather_set: Vec<Weather>,
+    pub weather_set: Vec<Weather>,
+    pub tug: Tug,
+    pub hookset: Hookset,
+    pub intuition: Option<Intuition>,
+    pub lure: Lure,
+    pub lure_proc: bool,
+    pub snagging: bool,
+    pub gig: bool,
+    pub folklore: bool,
+    pub fish_eyes: bool,
+    pub patch: (u8, u8),
 }
 
 impl Fish {
