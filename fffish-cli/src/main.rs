@@ -4,7 +4,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
     eorzea_time::{EORZEA_ZERO_TIME, EorzeaTime},
-    fish::{Fish, FishData, FishingItem},
+    fish::{Bait, Fish, FishData, FishingItem},
 };
 use ratatui::{
     DefaultTerminal,
@@ -71,9 +71,12 @@ impl App {
 
     fn render_info(&mut self, area: Rect, buf: &mut Buffer) {
         let item = self.get_selected_fish();
-        let bait_text = format!(
+        let bait_str = format!(
             "Bait: {}",
-            item.bait.as_ref().map(|i| i.name()).unwrap_or("")
+            item.bait
+                .as_ref()
+                .map(|i| self.bait_text(i))
+                .unwrap_or("".to_string())
         );
         let fish = self.fish_data.fish_by_id(item.id).unwrap();
         let (start, end) = fish.time_restriction();
@@ -90,7 +93,7 @@ impl App {
         border_block.render(area, buf);
 
         Paragraph::new(format!("Window: {} - {}", start, end)).render(areas[0], buf);
-        Paragraph::new(bait_text).render(areas[1], buf);
+        Paragraph::new(bait_str).render(areas[1], buf);
         Paragraph::new(format!("Tug: {}", fish.tug)).render(areas[2], buf);
         Paragraph::new(format!("Hookset: {}", fish.hookset)).render(areas[3], buf);
     }
@@ -104,6 +107,25 @@ impl App {
             buf,
             &mut self.state,
         );
+    }
+
+    fn bait_text(&self, bait: &FishingItem) -> String {
+        match bait {
+            FishingItem::Fish(name, id) => {
+                let fish = self.fish_data.fish_by_id(*id);
+                let inner_bait = fish
+                    .and_then(|f| f.bait_id().and_then(|b| self.fish_data.item_by_id(b)))
+                    .map(|i| self.bait_text(i))
+                    .unwrap_or("?".to_string());
+                format!(
+                    "{} -> {} ({})",
+                    inner_bait,
+                    name.clone(),
+                    fish.map_or("?".to_string(), |f| f.tug.to_string())
+                )
+            }
+            FishingItem::Bait(name, _) => name.clone(),
+        }
     }
 
     fn handle_key(&mut self, key: KeyEvent) {
