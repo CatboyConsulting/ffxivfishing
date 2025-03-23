@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use chrono::{Local, TimeDelta};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
@@ -26,6 +28,7 @@ fn main() -> Result<()> {
         fish_data: carbuncle_fishes().expect("Parsing the fish data failed"),
         user_data: UserData::default(),
         list_state: ListState::default(),
+        list_filter: ListFilter::None,
         item_cache: vec![],
         input: Input::default(),
         mode: AppMode::Search,
@@ -43,6 +46,24 @@ enum AppMode {
     Search,
 }
 
+#[derive(PartialEq, Debug)]
+enum ListFilter {
+    None,
+    Uncaught,
+    Favorite,
+}
+
+impl Display for ListFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ListFilter::None => "None",
+            ListFilter::Uncaught => "Uncaught",
+            ListFilter::Favorite => "Favorite",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Default, Serialize, Deserialize, Clone)]
 struct UserData {
     favorites: Vec<u32>,
@@ -54,6 +75,7 @@ struct App {
     user_data: UserData,
     item_cache: Vec<FishListItem>,
     list_state: ListState,
+    list_filter: ListFilter,
     input: Input,
     mode: AppMode,
 }
@@ -81,6 +103,7 @@ impl App {
                         favourite: self.is_favourite(f.id),
                         caught: self.is_caught(f.id),
                     })
+                    .filter(|item| self.is_displayed(item, &self.list_filter))
                     .collect();
                 self.item_cache.sort_by_key(|f| f.id);
             }
@@ -137,7 +160,7 @@ impl App {
 
         // List
         let items: Vec<ListItem> = self.item_cache.iter().map(ListItem::from).collect();
-        let block = Block::bordered();
+        let block = Block::bordered().title_top(format!("Filter: {}", self.list_filter));
         StatefulWidget::render(
             List::new(items).block(block).highlight_symbol("> "),
             list_area,
@@ -218,6 +241,10 @@ impl App {
                     self.toggle_favourites(fish_id);
                     self.item_cache = vec![];
                 }
+                KeyCode::Char('F') => {
+                    self.next_filter();
+                    self.item_cache = vec![];
+                }
                 _ => {}
             },
         }
@@ -263,6 +290,22 @@ impl App {
         } else {
             self.user_data.favorites.push(fish_id);
             let _ = self.save_user_data();
+        }
+    }
+
+    fn is_displayed(&self, item: &FishListItem, filter: &ListFilter) -> bool {
+        match filter {
+            ListFilter::None => true,
+            ListFilter::Uncaught => !self.is_caught(item.id),
+            ListFilter::Favorite => self.is_favourite(item.id),
+        }
+    }
+
+    fn next_filter(&mut self) {
+        self.list_filter = match self.list_filter {
+            ListFilter::None => ListFilter::Uncaught,
+            ListFilter::Uncaught => ListFilter::Favorite,
+            ListFilter::Favorite => ListFilter::None,
         }
     }
 
