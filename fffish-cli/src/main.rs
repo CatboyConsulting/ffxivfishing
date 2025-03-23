@@ -1,50 +1,73 @@
-use chrono::Local;
+use chrono::{Local, TimeDelta};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
-    eorzea_time::{EORZEA_ZERO_TIME, EorzeaTime},
-    fish::{Bait, Fish, FishData, FishingItem},
+    eorzea_time::EorzeaTime,
+    fish::{FishData, FishingItem},
 };
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::Style,
+    style::{Color, Style},
     text::Line,
     widgets::{
         Block, Borders, List, ListItem, ListState, Padding, Paragraph, StatefulWidget, Widget,
     },
 };
+use serde::{Deserialize, Serialize};
+use tui_input::{Input, backend::crossterm::EventHandler};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
     let terminal = ratatui::init();
     let mut app = App {
         fish_data: carbuncle_fishes().expect("Parsing the fish data failed"),
-        state: ListState::default(),
+        user_data: UserData::default(),
+        list_state: ListState::default(),
         item_cache: vec![],
+        input: Input::default(),
+        mode: AppMode::Search,
     };
-    app.state.select_first();
+    app.list_state.select_first();
 
     let result = app.run(terminal);
     ratatui::restore();
     result
 }
 
+#[derive(PartialEq, Debug)]
+enum AppMode {
+    List,
+    Search,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone)]
+struct UserData {
+    favorites: Vec<u32>,
+    caught: Vec<u32>,
+}
+
 struct App {
     fish_data: FishData,
+    user_data: UserData,
     item_cache: Vec<FishListItem>,
-    state: ListState,
+    list_state: ListState,
+    input: Input,
+    mode: AppMode,
 }
+
 impl App {
     fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        let _ = self.load_user_data();
         loop {
             if self.item_cache.is_empty() {
                 self.item_cache = self
                     .fish_data
                     .fishes()
                     .iter()
+                    .filter(|f| f.name.contains(self.input.value()))
                     .map(|f| FishListItem {
                         name: f.name().to_string(),
                         id: f.id,
@@ -55,6 +78,8 @@ impl App {
                             .start()
                             .to_system_time()
                             .into(),
+                        favourite: self.is_favourite(f.id),
+                        caught: self.is_caught(f.id),
                     })
                     .collect();
                 self.item_cache.sort_by_key(|f| f.id);
@@ -70,7 +95,12 @@ impl App {
     }
 
     fn render_info(&mut self, area: Rect, buf: &mut Buffer) {
-        let item = self.get_selected_fish();
+        let item = match self.get_selected_fish() {
+            Some(f) => f,
+            None => {
+                return;
+            }
+        };
         let bait_str = format!(
             "Bait: {}",
             item.bait
@@ -96,17 +126,40 @@ impl App {
         Paragraph::new(bait_str).render(areas[1], buf);
         Paragraph::new(format!("Tug: {}", fish.tug)).render(areas[2], buf);
         Paragraph::new(format!("Hookset: {}", fish.hookset)).render(areas[3], buf);
+        if self.user_data.caught.contains(&fish.id) {
+            Paragraph::new("Caught").render(areas[4], buf);
+        }
     }
 
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
+        let [search_area, list_area] =
+            Layout::vertical([Constraint::Max(3), Constraint::Fill(1)]).areas(area);
+
+        // List
         let items: Vec<ListItem> = self.item_cache.iter().map(ListItem::from).collect();
-        let block = Block::new().borders(Borders::LEFT);
+        let block = Block::bordered();
         StatefulWidget::render(
             List::new(items).block(block).highlight_symbol("> "),
-            area,
+            list_area,
             buf,
-            &mut self.state,
+            &mut self.list_state,
         );
+
+        // Search
+        let width = search_area.width.max(3) - 3;
+        let scroll = self.input.visual_scroll(width as usize);
+        let style = match self.mode {
+            AppMode::Search => Color::Blue.into(),
+            _ => Style::default(),
+        };
+        let input = Paragraph::new(self.input.value())
+            .style(style)
+            .scroll((0, scroll as u16))
+            .block(Block::bordered().title("Search"));
+        if self.mode == AppMode::Search {
+            // let x = self.input.visual_cursor().max(scroll) - scroll + 1;
+        }
+        Widget::render(input, search_area, buf);
     }
 
     fn bait_text(&self, bait: &FishingItem) -> String {
@@ -132,17 +185,94 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return;
         }
-        match key.code {
-            KeyCode::Char('j') => self.state.select_next(),
-            KeyCode::Char('k') => self.state.select_previous(),
-            KeyCode::Char('g') => self.state.select_first(),
-            KeyCode::Char('G') => self.state.select_last(),
-            _ => {}
+        match self.mode {
+            AppMode::Search => match key.code {
+                KeyCode::Esc => self.mode = AppMode::List,
+                KeyCode::Enter => {
+                    self.mode = AppMode::List;
+                    self.item_cache = vec![]
+                }
+                _ => {
+                    self.input.handle_event(&Event::Key(key));
+                }
+            },
+            AppMode::List => match key.code {
+                KeyCode::Char('j') => self.list_state.select_next(),
+                KeyCode::Char('k') => self.list_state.select_previous(),
+                KeyCode::Char('g') => self.list_state.select_first(),
+                KeyCode::Char('G') => self.list_state.select_last(),
+                KeyCode::Char('/') => self.mode = AppMode::Search,
+                KeyCode::Enter => {
+                    let fish_id = match self.get_selected_fish() {
+                        Some(f) => f.id,
+                        None => return,
+                    };
+                    self.toggle_caught(fish_id);
+                    self.item_cache = vec![];
+                }
+                KeyCode::Char('f') => {
+                    let fish_id = match self.get_selected_fish() {
+                        Some(f) => f.id,
+                        None => return,
+                    };
+                    self.toggle_favourites(fish_id);
+                    self.item_cache = vec![];
+                }
+                _ => {}
+            },
         }
     }
 
-    fn get_selected_fish(&self) -> &FishListItem {
-        &self.item_cache[self.state.selected().unwrap()]
+    fn get_selected_fish(&self) -> Option<&FishListItem> {
+        let selected = self.list_state.selected()?;
+        Some(&self.item_cache[selected])
+    }
+
+    fn is_favourite(&self, fish_id: u32) -> bool {
+        self.user_data.favorites.contains(&fish_id)
+    }
+
+    fn is_caught(&self, fish_id: u32) -> bool {
+        self.user_data.caught.contains(&fish_id)
+    }
+
+    fn toggle_caught(&mut self, fish_id: u32) {
+        if self.is_caught(fish_id) {
+            self.user_data.caught.remove(
+                self.user_data
+                    .caught
+                    .iter()
+                    .position(|x| *x == fish_id)
+                    .unwrap(),
+            );
+        } else {
+            self.user_data.caught.push(fish_id);
+            let _ = self.save_user_data();
+        }
+    }
+
+    fn toggle_favourites(&mut self, fish_id: u32) {
+        if self.is_favourite(fish_id) {
+            self.user_data.favorites.remove(
+                self.user_data
+                    .favorites
+                    .iter()
+                    .position(|x| *x == fish_id)
+                    .unwrap(),
+            );
+        } else {
+            self.user_data.favorites.push(fish_id);
+            let _ = self.save_user_data();
+        }
+    }
+
+    fn save_user_data(&self) -> Result<(), confy::ConfyError> {
+        confy::store("fffish-cli", "fish", self.user_data.clone())
+    }
+    fn load_user_data(&mut self) -> Result<(), confy::ConfyError> {
+        let data: UserData = confy::load("fffish-cli", "fish")?;
+        self.user_data = data;
+        Ok(())
     }
 }
 
@@ -161,18 +291,39 @@ struct FishListItem {
     id: u32,
     bait: Option<FishingItem>,
     next_window: chrono::DateTime<Local>,
+    favourite: bool,
+    caught: bool,
+}
+
+impl FishListItem {
+    fn get_icon(&self) -> String {
+        let mut result = "".to_string();
+        if self.favourite {
+            result += "★ ";
+        }
+        if self.caught {
+            result += "✔ ";
+        }
+        result
+    }
 }
 
 impl From<&FishListItem> for ListItem<'_> {
     fn from(value: &FishListItem) -> Self {
+        let style = match value.next_window - chrono::Local::now() {
+            t if t < TimeDelta::minutes(10) => Color::Red.into(),
+            t if t < TimeDelta::minutes(30) => Color::Yellow.into(),
+            _ => Style::new(),
+        };
         let line = Line::styled(
             format!(
-                "{} - {} - {}",
+                "{}{} - {} - {}",
+                value.get_icon(),
                 value.id,
                 value.name,
                 value.next_window.format("%Y-%m-%d %H:%M:%S"),
             ),
-            Style::new(),
+            style,
         );
         ListItem::new(line)
     }

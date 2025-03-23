@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 ffxivfishing = { path = "../ffxivfishing" }
-chrono = "0.4"
-crossterm = "0.28"
-ratatui = "0.29"
-color-eyre = "0.6"
+chrono = "*"
+crossterm = "*"
+ratatui = "*"
+color-eyre = "*"
+tui-input = "*"
+confy = "*"
+serde = "1.0.219"
