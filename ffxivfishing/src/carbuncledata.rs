@@ -282,14 +282,6 @@ mod tests {
 
     use super::*;
     #[test]
-    fn parse_weather_test() {
-        let weathers = parse_weather().unwrap();
-        assert!(!weathers.is_empty());
-        for w in weathers {
-            // println!("{}", w.weather_rates.len())
-        }
-    }
-    #[test]
     fn parse_fishing_spots_test() {
         let fish_spots = parse_fishing_spots().unwrap();
         assert!(!fish_spots.is_empty());
@@ -304,8 +296,7 @@ mod tests {
         assert!(!weathers.is_empty());
         for w in weathers {
             let eorzea_weather: WeatherForecast = (&w).into();
-            let current_weather =
-                eorzea_weather.weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap());
+            let _ = eorzea_weather.weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap());
         }
     }
 
@@ -314,8 +305,11 @@ mod tests {
         let data = parse_data().unwrap();
         let fishes = data.convert_to_fishdata();
         for fish in fishes.fishes() {
-            let window =
-                fish.next_window(EorzeaTime::from_time(&SystemTime::now()).unwrap(), 1_000);
+            let window = fish.next_window(
+                EorzeaTime::from_time(&SystemTime::now()).unwrap(),
+                false,
+                1_000,
+            );
             if window.is_some() {
                 let w = window.unwrap();
                 println!(

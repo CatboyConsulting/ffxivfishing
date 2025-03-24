@@ -352,7 +352,7 @@ mod tests {
             lure_proc: false,
         };
         let result = fish
-            .next_window(EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap(), 1000)
+            .next_window(EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap(), false, 1000)
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 3, 1, 0, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 2, 0, 0).unwrap());
@@ -392,7 +392,7 @@ mod tests {
             lure_proc: false,
         };
         let result = fish
-            .next_window(EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap(), 1000)
+            .next_window(EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap(), false, 1000)
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 3, 7, 30, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 8, 0, 0).unwrap());
@@ -432,7 +432,7 @@ mod tests {
             lure_proc: false,
         };
         let result = fish
-            .next_window(EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap(), 1_000)
+            .next_window(EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap(), false, 1_000)
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 4, 23, 30, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 5, 0, 0, 0).unwrap());
