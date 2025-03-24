@@ -228,7 +228,7 @@ impl EorzeaDuration {
 #[derive(Debug, PartialEq)]
 pub struct EorzeaDurationError;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct EorzeaTimeSpan {
     start: EorzeaTime,
     duration: EorzeaDuration,

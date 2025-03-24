@@ -1,11 +1,15 @@
-use std::fmt::Display;
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    time::{Duration, SystemTime},
+};
 
 use chrono::{Local, TimeDelta};
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, poll};
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
-    eorzea_time::EorzeaTime,
+    eorzea_time::{EorzeaTime, EorzeaTimeSpan},
     fish::{FishData, FishingItem},
 };
 use ratatui::{
@@ -29,7 +33,9 @@ fn main() -> Result<()> {
         user_data: UserData::default(),
         list_state: ListState::default(),
         list_filter: ListFilter::None,
+        list_sort: ListSort::NextWindow,
         item_cache: vec![],
+        last_refresh: SystemTime::UNIX_EPOCH,
         input: Input::default(),
         mode: AppMode::Search,
     };
@@ -53,6 +59,11 @@ enum ListFilter {
     Favorite,
 }
 
+#[derive(PartialEq, Debug)]
+enum ListSort {
+    NextWindow,
+}
+
 impl Display for ListFilter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -74,17 +85,30 @@ struct App {
     fish_data: FishData,
     user_data: UserData,
     item_cache: Vec<FishListItem>,
+    last_refresh: SystemTime,
     list_state: ListState,
     list_filter: ListFilter,
+    list_sort: ListSort,
     input: Input,
     mode: AppMode,
+}
+
+impl ListSort {
+    fn compare(&self, a: &FishListItem, b: &FishListItem) -> Ordering {
+        match self {
+            ListSort::NextWindow => a
+                .next_window_start_local()
+                .cmp(&b.next_window_start_local()),
+        }
+    }
 }
 
 impl App {
     fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         let _ = self.load_user_data();
         loop {
-            if self.item_cache.is_empty() {
+            if self.item_cache.is_empty() || self.last_refresh.elapsed()? > Duration::from_secs(30)
+            {
                 self.item_cache = self
                     .fish_data
                     .fishes()
@@ -94,25 +118,23 @@ impl App {
                         name: f.name().to_string(),
                         id: f.id,
                         bait: self.fish_data.item_by_id(f.bait_id().unwrap()).cloned(),
-                        next_window: f
-                            .next_window(EorzeaTime::now(), 1_000)
-                            .unwrap()
-                            .start()
-                            .to_system_time()
-                            .into(),
+                        next_window: f.next_window(EorzeaTime::now(), true, 1_000).unwrap(),
                         favourite: self.is_favourite(f.id),
                         caught: self.is_caught(f.id),
                     })
                     .filter(|item| self.is_displayed(item, &self.list_filter))
                     .collect();
-                self.item_cache.sort_by_key(|f| f.id);
+                self.item_cache.sort_by(|a, b| self.list_sort.compare(a, b));
+                self.last_refresh = SystemTime::now();
             }
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
-            if let Event::Key(e) = event::read()? {
-                if e.code == KeyCode::Char('q') {
-                    break Ok(());
+            if event::poll(Duration::from_secs(10))? {
+                if let Event::Key(e) = event::read()? {
+                    if e.code == KeyCode::Char('q') {
+                        break Ok(());
+                    }
+                    self.handle_key(e)
                 }
-                self.handle_key(e)
             }
         }
     }
@@ -333,7 +355,7 @@ struct FishListItem {
     name: String,
     id: u32,
     bait: Option<FishingItem>,
-    next_window: chrono::DateTime<Local>,
+    next_window: EorzeaTimeSpan,
     favourite: bool,
     caught: bool,
 }
@@ -353,7 +375,8 @@ impl FishListItem {
 
 impl From<&FishListItem> for ListItem<'_> {
     fn from(value: &FishListItem) -> Self {
-        let style = match value.next_window - chrono::Local::now() {
+        let style = match value.next_window_start_local() - chrono::Local::now() {
+            t if t < TimeDelta::minutes(0) => Color::Blue.into(),
             t if t < TimeDelta::minutes(10) => Color::Red.into(),
             t if t < TimeDelta::minutes(30) => Color::Yellow.into(),
             _ => Style::new(),
@@ -364,10 +387,37 @@ impl From<&FishListItem> for ListItem<'_> {
                 value.get_icon(),
                 value.id,
                 value.name,
-                value.next_window.format("%Y-%m-%d %H:%M:%S"),
+                value.time_to_window_string(),
             ),
             style,
         );
         ListItem::new(line)
+    }
+}
+
+impl FishListItem {
+    fn next_window_start_local(&self) -> chrono::DateTime<Local> {
+        self.next_window.start().to_system_time().into()
+    }
+    fn next_window_end_local(&self) -> chrono::DateTime<Local> {
+        self.next_window.end().to_system_time().into()
+    }
+    fn time_to_window_string(&self) -> String {
+        match self.next_window_start_local() - chrono::Local::now() {
+            t if t < TimeDelta::minutes(0) => {
+                let t2 = self.next_window_end_local() - chrono::Local::now();
+                format!("for {} more min", t2.num_minutes() % 60)
+            }
+            t if t < TimeDelta::minutes(60) => {
+                format!("in {} min", t.num_minutes() % 60)
+            }
+            t if t < TimeDelta::days(1) => {
+                format!("in {}h {:0>2}min", t.num_hours() % 24, t.num_minutes() % 60)
+            }
+            _ => self
+                .next_window_start_local()
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string(),
+        }
     }
 }
