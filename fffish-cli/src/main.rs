@@ -6,12 +6,13 @@ use std::{
 
 use chrono::{Local, TimeDelta};
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, poll};
+
 use ffxivfishing::{
     carbuncledata::carbuncle_fishes,
     eorzea_time::{EorzeaTime, EorzeaTimeSpan},
     fish::{FishData, FishingItem},
 };
+use ratatui::crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
@@ -129,7 +130,7 @@ impl App {
             }
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
             if event::poll(Duration::from_secs(10))? {
-                if let Event::Key(e) = event::read()? {
+                if let CrosstermEvent::Key(e) = event::read()? {
                     if e.code == KeyCode::Char('q') {
                         break Ok(());
                     }
@@ -238,7 +239,7 @@ impl App {
                     self.item_cache = vec![]
                 }
                 _ => {
-                    self.input.handle_event(&Event::Key(key));
+                    self.input.handle_event(&CrosstermEvent::Key(key));
                 }
             },
             AppMode::List => match key.code {
