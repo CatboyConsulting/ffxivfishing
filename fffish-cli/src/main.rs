@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Display,
+    path::PathBuf,
     time::{Duration, SystemTime},
 };
 
@@ -8,7 +9,6 @@ use chrono::{Local, TimeDelta};
 use color_eyre::Result;
 
 use ffxivfishing::{
-    carbuncledata::carbuncle_fishes,
     eorzea_time::{EorzeaTime, EorzeaTimeSpan},
     fish::{FishData, FishingItem},
 };
@@ -26,11 +26,93 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use tui_input::{Input, backend::crossterm::EventHandler};
 
+fn data_file_path() -> Result<PathBuf, confy::ConfyError> {
+    let mut path = confy::get_configuration_file_path("fffish-cli", "fish")?;
+    path.pop(); // remove fish.toml
+    path.push("data.json");
+    Ok(path)
+}
+
+fn update_data_file(path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    const URL: &str = "https://raw.githubusercontent.com/icykoneko/ff14-fish-tracker-app/refs/heads/master/js/app/data.js";
+    let body = ureq::get(URL).call()?.into_string()?;
+
+    // Strip JS wrapper
+    let json_str = body
+        .strip_prefix("const DATA = ")
+        .unwrap_or(&body)
+        .trim_end()
+        .trim_end_matches(';');
+
+    // Quote unquoted top-level object keys (e.g. FISH: -> "FISH":)
+    // We process line-by-line to avoid replacing inside string values.
+    const KEYS: &[&str] = &[
+        "FISH",
+        "FISHING_SPOTS",
+        "SPEARFISHING_SPOTS",
+        "ITEMS",
+        "WEATHER_RATES",
+        "WEATHER_TYPES",
+        "REGIONS",
+        "ZONES",
+        "FOLKLORE",
+    ];
+    let mut result = String::new();
+    for line in json_str.lines() {
+        let trimmed = line.trim_start();
+        let mut replaced = false;
+        for key in KEYS {
+            if trimmed.starts_with(key) && trimmed[key.len()..].starts_with(':') {
+                let indent = &line[..line.len() - trimmed.len()];
+                result.push_str(indent);
+                result.push('"');
+                result.push_str(key);
+                result.push_str("\":");
+                result.push_str(&trimmed[key.len() + 1..]);
+                result.push('\n');
+                replaced = true;
+                break;
+            }
+        }
+        if !replaced {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    let json_str = result;
+
+    // Validate JSON
+    let _: serde_json::Value = serde_json::from_str(&json_str)?;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, json_str)?;
+    Ok(())
+}
+
+fn load_fish_data(path: &std::path::Path) -> Result<FishData, Box<dyn std::error::Error>> {
+    if path.exists() {
+        let contents = std::fs::read_to_string(path)?;
+        match ffxivfishing::carbuncledata::carbuncle_fishes_from_str(&contents) {
+            Ok(data) => return Ok(data),
+            Err(e) => eprintln!(
+                "Failed to parse cached data file: {}, using embedded fallback",
+                e
+            ),
+        }
+    }
+    ffxivfishing::carbuncledata::carbuncle_fishes()
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let terminal = ratatui::init();
+
+    let data_path = data_file_path().expect("Failed to determine data file path");
+
     let mut app = App {
-        fish_data: carbuncle_fishes().expect("Parsing the fish data failed"),
+        fish_data: load_fish_data(&data_path).expect("Loading fish data failed"),
         user_data: UserData::default(),
         list_state: ListState::default(),
         list_filter: ListFilter::None,
@@ -39,6 +121,8 @@ fn main() -> Result<()> {
         last_refresh: SystemTime::UNIX_EPOCH,
         input: Input::default(),
         mode: AppMode::Search,
+        data_path,
+        message: None,
     };
     app.list_state.select_first();
 
@@ -46,7 +130,6 @@ fn main() -> Result<()> {
     ratatui::restore();
     result
 }
-
 #[derive(PartialEq, Debug)]
 enum AppMode {
     List,
@@ -92,6 +175,8 @@ struct App {
     list_sort: ListSort,
     input: Input,
     mode: AppMode,
+    data_path: PathBuf,
+    message: Option<(String, bool)>,
 }
 
 impl ListSort {
@@ -129,13 +214,13 @@ impl App {
                 self.last_refresh = SystemTime::now();
             }
             terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
-            if event::poll(Duration::from_secs(10))? {
-                if let CrosstermEvent::Key(e) = event::read()? {
-                    if e.code == KeyCode::Char('q') {
-                        break Ok(());
-                    }
-                    self.handle_key(e)
+            if event::poll(Duration::from_secs(10))?
+                && let CrosstermEvent::Key(e) = event::read()?
+            {
+                if e.code == KeyCode::Char('q') {
+                    break Ok(());
                 }
+                self.handle_key(e)
             }
         }
     }
@@ -231,6 +316,10 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return;
         }
+        if self.message.is_some() {
+            self.message = None;
+            return;
+        }
         match self.mode {
             AppMode::Search => match key.code {
                 KeyCode::Esc => self.mode = AppMode::List,
@@ -248,6 +337,16 @@ impl App {
                 KeyCode::Char('g') => self.list_state.select_first(),
                 KeyCode::Char('G') => self.list_state.select_last(),
                 KeyCode::Char('/') => self.mode = AppMode::Search,
+                KeyCode::Char('u') => {
+                    if let Err(e) = update_data_file(&self.data_path) {
+                        self.show_message(format!("Data update failed:\n{}", e), true);
+                    } else if let Ok(data) = load_fish_data(&self.data_path) {
+                        self.fish_data = data;
+                        self.item_cache = vec![];
+                        self.list_state.select_first();
+                        self.show_message("Data updated successfully!".to_string(), false);
+                    }
+                }
                 KeyCode::Enter => {
                     let fish_id = match self.get_selected_fish() {
                         Some(f) => f.id,
@@ -340,6 +439,49 @@ impl App {
         self.user_data = data;
         Ok(())
     }
+    fn show_message(&mut self, msg: String, is_error: bool) {
+        self.message = Some((msg, is_error));
+    }
+
+    fn render_message(&self, area: Rect, buf: &mut Buffer) {
+        let (msg, is_error) = match &self.message {
+            Some(m) => m,
+            None => return,
+        };
+
+        let popup_width = (area.width * 2 / 3).max(30);
+        let popup_height = (msg.lines().count() as u16 + 4).max(5);
+        let popup_area = Rect {
+            x: area.x + (area.width - popup_width) / 2,
+            y: area.y + (area.height - popup_height) / 2,
+            width: popup_width,
+            height: popup_height,
+        };
+
+        // Clear the popup area with a background color
+        for y in popup_area.top()..popup_area.bottom() {
+            for x in popup_area.left()..popup_area.right() {
+                if let Some(cell) = buf.cell_mut((x, y)) {
+                    cell.set_bg(Color::Black);
+                }
+            }
+        }
+
+        let (title, color) = if *is_error {
+            (" Error ", Color::Red)
+        } else {
+            (" Success ", Color::Green)
+        };
+        let block = Block::bordered()
+            .title(title)
+            .style(Style::default().fg(color));
+        let inner = block.inner(popup_area);
+        block.render(popup_area, buf);
+
+        Paragraph::new(msg.clone())
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .render(inner, buf);
+    }
 }
 
 impl Widget for &mut App {
@@ -348,6 +490,7 @@ impl Widget for &mut App {
             Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).areas(area);
         self.render_list(list_area, buf);
         self.render_info(info_area, buf);
+        self.render_message(area, buf);
     }
 }
 
@@ -420,5 +563,73 @@ impl FishListItem {
                 .format("%Y-%m-%d %H:%M:%S")
                 .to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_js_to_json_transformation() {
+        let js_input = r#"const DATA = {
+  FISH: {
+    "1": {"_id": 1}
+  },
+  ITEMS: {
+    "2": {"name": "book_fr: test"}
+  },
+  FOLKLORE: {
+    "3": {"name": "value"}
+  }
+};"#;
+
+        let json_str = js_input
+            .strip_prefix("const DATA = ")
+            .unwrap_or(js_input)
+            .trim_end()
+            .trim_end_matches(';');
+
+        const KEYS: &[&str] = &[
+            "FISH",
+            "FISHING_SPOTS",
+            "SPEARFISHING_SPOTS",
+            "ITEMS",
+            "WEATHER_RATES",
+            "WEATHER_TYPES",
+            "REGIONS",
+            "ZONES",
+            "FOLKLORE",
+        ];
+        let mut result = String::new();
+        for line in json_str.lines() {
+            let trimmed = line.trim_start();
+            let mut replaced = false;
+            for key in KEYS {
+                if trimmed.starts_with(key) && trimmed[key.len()..].starts_with(':') {
+                    let indent = &line[..line.len() - trimmed.len()];
+                    result.push_str(indent);
+                    result.push('"');
+                    result.push_str(key);
+                    result.push_str("\":");
+                    result.push_str(&trimmed[key.len() + 1..]);
+                    result.push('\n');
+                    replaced = true;
+                    break;
+                }
+            }
+            if !replaced {
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+
+        assert!(result.contains("\"FISH\":"));
+        assert!(result.contains("\"ITEMS\":"));
+        assert!(result.contains("\"FOLKLORE\":"));
+        // Ensure string values with colons are NOT modified
+        assert!(result.contains("\"book_fr: test\""));
+
+        let _: serde_json::Value =
+            serde_json::from_str(&result).expect("Should parse as valid JSON");
     }
 }

@@ -268,9 +268,13 @@ impl CarbuncleData {
     }
 }
 
+pub fn carbuncle_fishes_from_str(data: &str) -> Result<FishData, Box<dyn Error>> {
+    let parsed: CarbuncleData = serde_json::from_str(data)?;
+    Ok(parsed.convert_to_fishdata())
+}
+
 pub fn carbuncle_fishes() -> Result<FishData, Box<dyn Error>> {
-    let data = parse_data()?;
-    Ok(data.convert_to_fishdata())
+    carbuncle_fishes_from_str(DATA)
 }
 
 #[cfg(test)]
@@ -310,16 +314,19 @@ mod tests {
                 false,
                 1_000,
             );
-            if window.is_some() {
-                let w = window.unwrap();
-                println!(
-                    "{:?}: {} - {:?}",
-                    fish.name(),
-                    w,
-                    w.start().to_system_time()
-                );
-            } else {
-                println!("{:?}: !!!", fish.name());
+            match window {
+                Some(ref _window1) => {
+                    let w = window.unwrap();
+                    println!(
+                        "{:?}: {} - {:?}",
+                        fish.name(),
+                        w,
+                        w.start().to_system_time()
+                    );
+                }
+                None => {
+                    println!("{:?}: !!!", fish.name());
+                }
             }
         }
     }
