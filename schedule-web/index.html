@@ -507,20 +507,6 @@
         updateScheduleCount();
       }
 
-      function localSecsToUtcSecs(localSecs) {
-        const now = new Date();
-        const d = new Date(
-          Date.UTC(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            Math.floor(localSecs / 3600),
-            Math.floor((localSecs % 3600) / 60),
-          ),
-        );
-        return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60;
-      }
-
       function readSchedule() {
         const rows = document.querySelectorAll(
           "#schedule-rows .schedule-row",
@@ -530,10 +516,9 @@
           const selects = row.querySelectorAll("select");
           const inputs = row.querySelectorAll("input[type=text]");
           const dayVal = selects[0].value;
-          const startSec = localSecsToUtcSecs(timeToSecs(inputs[0].value));
-          let endSec = localSecsToUtcSecs(timeToSecs(inputs[1].value));
+          const startSec = timeToSecs(inputs[0].value);
+          const endSec = timeToSecs(inputs[1].value);
           if (isNaN(startSec) || isNaN(endSec)) continue;
-          if (endSec <= startSec) endSec += 86400;
           const entry = {startSec, endSec};
           if (dayVal !== "") {
             entry.dayOfWeek = parseInt(dayVal, 10);
@@ -563,6 +548,7 @@
         const nowUnix = Math.floor(Date.now() / 1000);
         const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
         const timeperiodSecs = BigInt(formData.days * 86400);
+        const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
         elStatus.textContent = `Querying windows over the next ${formData.days} day(s)...`;
 
@@ -576,6 +562,7 @@
           nowEorzea,
           JSON.stringify(formData.schedule),
           timeperiodSecs,
+          timezoneName,
         );
         const windows = JSON.parse(windowsJson);
         _lastWindows = windows;

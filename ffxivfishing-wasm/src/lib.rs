@@ -3,6 +3,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use chrono::{Offset, TimeZone, Utc};
+use chrono_tz::Tz;
 use ffxivfishing::{
     carbuncledata,
     eorzea_time::EorzeaTime,
@@ -120,6 +122,7 @@ fn window_overlaps_any_schedule(
     win_start_rt: SystemTime,
     win_end_rt: SystemTime,
     schedule: &[ScheduleEntry],
+    tz: Tz,
 ) -> bool {
     let start_secs = win_start_rt
         .duration_since(UNIX_EPOCH)
@@ -130,22 +133,43 @@ fn window_overlaps_any_schedule(
         .unwrap_or_default()
         .as_secs();
 
-    let start_day = start_secs / 86400;
-    let end_day = end_secs / 86400;
+    let win_start_day = start_secs / 86400;
+    let win_end_day = end_secs / 86400;
 
-    for day in start_day..=end_day {
+    for day in win_start_day..=win_end_day {
         let day_midnight = day * 86400;
+        let day_end = day_midnight + 86400;
         let day_of_week = ((day + 4) % 7) as u8;
+
+        let portion_start = start_secs.max(day_midnight);
+        let portion_end = end_secs.min(day_end);
+        if portion_start >= portion_end {
+            continue;
+        }
+
+        let dt = Utc
+            .timestamp_opt(day_midnight as i64, 0)
+            .single()
+            .unwrap();
+        let local_minus_utc = tz.offset_from_utc_datetime(&dt.naive_utc()).fix().local_minus_utc();
+        let offset = -local_minus_utc as i64;
+
+        let local_start = portion_start as i64 - offset;
+        let local_end = portion_end as i64 - offset;
+        let local_day_start = (local_start / 86400) * 86400;
 
         for entry in schedule {
             if entry
                 .day_of_week
                 .map_or_else(|| true, |dow| dow == day_of_week)
             {
-                let sched_start = day_midnight + entry.start_sec;
-                let sched_end = day_midnight + entry.end_sec;
+                let sched_start = local_day_start + entry.start_sec as i64;
+                let mut sched_end = local_day_start + entry.end_sec as i64;
+                if entry.end_sec <= entry.start_sec {
+                    sched_end += 86400;
+                }
 
-                if start_secs < sched_end && end_secs > sched_start {
+                if local_start < sched_end && local_end > sched_start {
                     return true;
                 }
             }
@@ -219,9 +243,13 @@ pub fn get_fish_windows_in_schedule(
     timestamp_esec: u64,
     schedule_json: &str,
     timeperiod_secs: u64,
+    timezone_name: &str,
 ) -> Result<String, JsValue> {
-    let schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
+    let local_schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {}", e)))?;
+    let tz: Tz = timezone_name
+        .parse()
+        .map_err(|_| JsValue::from_str("Invalid timezone name"))?;
 
     with_fish_data(|fd| {
         let fish = fd
@@ -243,7 +271,13 @@ pub fn get_fish_windows_in_schedule(
                 break;
             }
 
-            if fw_end_rt > now_rt && window_overlaps_any_schedule(fw_start_rt, fw_end_rt, &schedule)
+            if fw_end_rt > now_rt
+                && window_overlaps_any_schedule(
+                    fw_start_rt,
+                    fw_end_rt,
+                    &local_schedule,
+                    tz,
+                )
             {
                 windows.push(FishWindow {
                     start_esec: fw.start().as_esecs(),
@@ -333,5 +367,121 @@ pub fn unix_from_eorzea_time(esec: u64) -> u64 {
 #[wasm_bindgen]
 pub fn unix_to_eorzea_esec(unix_secs: u64) -> u64 {
     ((unix_secs as f64) * 3600.0 / 175.0).round() as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn tz() -> Tz {
+        "Europe/London".parse().unwrap()
+    }
+
+    fn bst_secs() -> u64 {
+        Utc.with_ymd_and_hms(2024, 7, 15, 0, 0, 0).single().unwrap().timestamp() as u64
+    }
+
+    fn gmt_secs() -> u64 {
+        Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).single().unwrap().timestamp() as u64
+    }
+
+    #[test]
+    fn bst_summer_23_to_24_does_not_match_19_56_utc() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let b = bst_secs();
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 71760),
+            UNIX_EPOCH + Duration::from_secs(b + 72150),
+            &s, tz()));
+    }
+
+    #[test]
+    fn bst_summer_23_to_24_matches_21_56_utc() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let b = bst_secs();
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 78960),
+            UNIX_EPOCH + Duration::from_secs(b + 79350),
+            &s, tz()));
+    }
+
+    #[test]
+    fn gmt_winter_23_to_24_does_not_match_19_56_utc() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let b = gmt_secs();
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 71760),
+            UNIX_EPOCH + Duration::from_secs(b + 72150),
+            &s, tz()));
+    }
+
+    #[test]
+    fn gmt_winter_23_to_24_does_not_match_20_56_utc_but_matches_22_56() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let b = gmt_secs();
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 75360),
+            UNIX_EPOCH + Duration::from_secs(b + 75720),
+            &s, tz()));
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 82560),
+            UNIX_EPOCH + Duration::from_secs(b + 82920),
+            &s, tz()));
+    }
+
+    #[test]
+    fn same_utc_window_matches_bst_but_not_gmt() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        // Window at 21:56-22:02 UTC = 22:56-23:02 BST — overlaps 23:00-24:00 BST
+        let ws = 78960u64; let we = 79320u64;
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(bst_secs() + ws),
+            UNIX_EPOCH + Duration::from_secs(bst_secs() + we),
+            &s, tz()));
+        // Same UTC window = 21:56-22:02 GMT — does NOT overlap 23:00-24:00 GMT
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(gmt_secs() + ws),
+            UNIX_EPOCH + Duration::from_secs(gmt_secs() + we),
+            &s, tz()));
+    }
+
+    #[test]
+    fn partial_overlap_works_correctly() {
+        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let b = bst_secs();
+        // 22:00-23:05 UTC = 23:00-00:05 BST — overlaps 23:00-24:00
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 79200),
+            UNIX_EPOCH + Duration::from_secs(b + 83100),
+            &s, tz()));
+        // 22:00-22:30 UTC = 23:00-23:30 BST — entirely inside
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 79200),
+            UNIX_EPOCH + Duration::from_secs(b + 81000),
+            &s, tz()));
+        // 20:00-20:30 UTC = 21:00-21:30 BST — entirely before
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + 72000),
+            UNIX_EPOCH + Duration::from_secs(b + 73800),
+            &s, tz()));
+    }
+
+    #[test]
+    fn day_of_week_filtering_works() {
+        let s = vec![ScheduleEntry { day_of_week: Some(1), start_sec: 82800, end_sec: 86400 }];
+        let b = gmt_secs();
+        // Jan 15, 2024 = Monday: (day+4)%7 = 1, dayOfWeek(1) == 1 → should match
+        let win_s = 82860u64; let win_e = 82920u64;
+        assert!(window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs(b + win_s),
+            UNIX_EPOCH + Duration::from_secs(b + win_e),
+            &s, tz()));
+        // Jan 16, 2024 = Tuesday: (day+4)%7 = 2, dayOfWeek(1) != 2 → should NOT match
+        assert!(!window_overlaps_any_schedule(
+            UNIX_EPOCH + Duration::from_secs((b + 1 * 86400) + win_s),
+            UNIX_EPOCH + Duration::from_secs((b + 1 * 86400) + win_e),
+            &s, tz()));
+    }
 }
 
