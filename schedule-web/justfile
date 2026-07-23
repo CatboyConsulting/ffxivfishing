@@ -1,0 +1,12 @@
+build:
+    wasm-pack build ../ffxivfishing-wasm --target web --out-dir pkg
+
+dist: build
+    mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html dist/
+
+deploy: dist
+    wrangler pages deploy dist --project-name ffxivfishing
+
+deploy-no-build:
+    mkdir -p dist && cp -r pkg index.html dist/
+    wrangler pages deploy dist --project-name ffxivfishing

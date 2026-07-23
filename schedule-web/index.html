@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FFXIV Fishing Schedule Tool</title>
+  <style>
+    :root {
+      --bg-dark: #1a1822;
+      --bg-medium: #24212e;
+      --bg-hover: #2e2a3a;
+      --bg-border: #3a3645;
+      --bg-error: #2e1414;
+      --bg-primary: #4e7a4e;
+      --text-primary: #e8e0d0;
+      --text-heading: #f0e8d8;
+      --text-accent: #c9a86c;
+      --text-muted: #9a9488;
+      --text-error: #c96060;
+      --text-white: #fff;
+    }
+
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem;
+      color: var(--text-heading);
+    }
+
+    .fish-info {
+      font-size: 0.9rem;
+      color: var(--text-accent);
+      margin-bottom: 0.75rem;
+    }
+
+    form {
+      background: var(--bg-medium);
+      border: 1px solid var(--bg-border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .top-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: end;
+      margin-bottom: 0.5rem;
+    }
+
+    .top-row label {
+      display: flex;
+      flex-direction: column;
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .top-row input,
+    .top-row select {
+      margin-top: 2px;
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-wrap input {
+      width: 240px;
+    }
+
+    .search-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-medium);
+      border: 1px solid var(--bg-border);
+      border-top: none;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 10;
+      display: none;
+    }
+
+    .search-results div {
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    .search-results div:hover {
+      background: var(--bg-hover);
+    }
+
+    .selected-fish {
+      font-size: 0.8rem;
+      color: var(--text-accent);
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    button {
+      font-family: inherit;
+      font-size: 1rem;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      border: 1px solid var(--bg-border);
+      border-radius: 4px;
+      padding: 4px 8px;
+    }
+
+    button {
+      background: var(--bg-hover);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: var(--bg-border);
+    }
+
+    .schedule-row {
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-border);
+      border-radius: 4px;
+      padding: 0.5rem;
+      margin-bottom: 0.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .schedule-row label {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .schedule-row input,
+    .schedule-row select {
+      margin-top: 2px;
+      padding: 3px 6px;
+      font-size: 1rem;
+    }
+
+    .remove-btn {
+      margin-left: auto;
+      padding: 3px 8px;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 600px) {
+      .schedule-header {
+        margin: 0.5rem 0 0.25rem;
+      }
+
+      .schedule-toggle {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+      }
+
+      .schedule-toggle:hover {
+        color: var(--text-heading);
+      }
+
+      .toggle-arrow {
+        font-size: 0.6rem;
+        transition: transform 0.15s;
+      }
+
+      .schedule-toggle.collapsed .toggle-arrow {
+        transform: rotate(-90deg);
+      }
+
+      .schedule-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .schedule-row label {
+        width: 100%;
+      }
+
+      .schedule-row input,
+      .schedule-row select {
+        width: 100%;
+      }
+
+      .remove-btn {
+        margin-left: 0;
+        align-self: end;
+      }
+    }
+
+    .status {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin: 0.5rem 0;
+    }
+
+    .status.error {
+      color: var(--text-error);
+      background: var(--bg-error);
+      padding: 0.5rem;
+      border-radius: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1rem;
+      margin: 0.5rem 0;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--bg-border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-medium);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    td {
+      color: var(--text-primary);
+    }
+
+    .download-btn {
+      margin-top: 0.25rem;
+    }
+
+    .submit-row {
+      margin-top: 0.75rem;
+    }
+
+    .btn-primary {
+      background: var(--bg-primary);
+      color: var(--text-white);
+      font-weight: 600;
+      padding: 6px 20px;
+    }
+
+    .dl-single {
+      background: none;
+      border: none;
+      padding: 2px 6px;
+      cursor: pointer;
+      display: inline-flex;
+      gap: 4px;
+      color: var(--text-muted);
+    }
+
+    .dl-single:hover {
+      color: var(--text-heading);
+    }
+
+    footer a {
+      color: var(--text-accent);
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 2rem;
+      padding: 1rem 0;
+      border-top: 1px solid var(--bg-border);
+    }
+
+    #schedule-content.hidden {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      #schedule-content {
+        display: none;
+      }
+
+      #schedule-content.open {
+        display: block;
+      }
+
+      .search-wrap input {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>FFXIV Fishing - Schedule Tool</h1>
+    <div id="fish-info" class="fish-info"></div>
+
+    <form id="config">
+      <div class="top-row">
+        <label>Fish
+          <div class="search-wrap">
+            <input type="text" id="fish-search" placeholder="Type fish name..." autocomplete="off" />
+            <div class="search-results" id="fish-results"></div>
+          </div>
+        </label>
+        <label>Search window in days
+          <input type="number" name="days" min="1" />
+        </label>
+      </div>
+
+      <div class="selected-fish" id="selected-fish"></div>
+
+      <div class="schedule-header">
+        <button type="button" id="schedule-toggle" class="schedule-toggle">
+          <span id="schedule-label">Schedule entries</span>
+          <span class="toggle-arrow">&#9660;</span>
+        </button>
+      </div>
+      <div id="schedule-content">
+        <div id="schedule-rows"></div>
+        <button type="button" id="add-schedule">+ Add schedule</button>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="btn-primary">Search</button>
+      </div>
+    </form>
+
+    <div id="status" class="status">Loading...</div>
+    <table id="results" style="display: none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Day</th>
+          <th>Window (Local Time)</th>
+          <th>Window in ET</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <button id="download-ics" type="button" class="download-btn" style="display: none">
+      Download .ics
+    </button>
+
+    <script type="module">
+      import init, {
+        init_default,
+        search_fish,
+        get_fish,
+        get_fish_windows_in_schedule,
+        unix_to_eorzea_esec,
+        unix_from_eorzea_time,
+      } from "./pkg/ffxivfishing_wasm.js";
+
+      const DAY_OPTIONS = [
+        {value: "", label: "Any"},
+        {value: "0", label: "Sun"},
+        {value: "1", label: "Mon"},
+        {value: "2", label: "Tue"},
+        {value: "3", label: "Wed"},
+        {value: "4", label: "Thu"},
+        {value: "5", label: "Fri"},
+        {value: "6", label: "Sat"},
+      ];
+
+      let _lastWindows = [];
+      let _lastFishName = "";
+      let _selectedFishId = 0;
+
+      function daySelectHtml(selected) {
+        return DAY_OPTIONS.map(
+          (o) =>
+            `<option value="${o.value}"${o.value === selected ? " selected" : ""}>${o.label}</option>`,
+        ).join("");
+      }
+
+      function timeToSecs(str) {
+        str = str.trim();
+        let match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (!match) return NaN;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === "PM" && h !== 12) h += 12;
+        if (ampm === "AM" && h === 12) h = 0;
+        return h * 3600 + m * 60;
+      }
+
+      function secsToTime(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+      }
+
+      const STORAGE_KEY = "lastSearch";
+
+      function saveSearch(p) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+        } catch { }
+      }
+
+      function restoreSearch() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const p = JSON.parse(raw);
+          if (
+            p &&
+            typeof p.fishId === "number" &&
+            Array.isArray(p.schedule) &&
+            typeof p.days === "number"
+          ) {
+            return p;
+          }
+        } catch { }
+        return null;
+      }
+
+      function getFormData() {
+        const saved = restoreSearch();
+        if (saved) {
+          return saved;
+        }
+        return {
+          fishId: 0,
+          schedule: [{startSec: 0, endSec: 86400}],
+          days: 30,
+        };
+      }
+
+      function updateScheduleCount() {
+        const count = document.querySelectorAll(
+          "#schedule-rows .schedule-row",
+        ).length;
+        document.getElementById("schedule-label").textContent =
+          "Schedule entries (" + count + ")";
+      }
+
+      function createScheduleRow(entry) {
+        const div = document.createElement("div");
+        div.className = "schedule-row";
+        div.innerHTML = `
+        <label>Day
+          <select>${daySelectHtml(entry.dayOfWeek !== undefined ? String(entry.dayOfWeek) : "")}</select>
+        </label>
+        <label>Start
+          <input type="text" value="${secsToTime(entry.startSec)}" />
+        </label>
+        <label>End
+          <input type="text" value="${secsToTime(entry.endSec)}" />
+        </label>
+        <button type="button" class="remove-btn">x</button>
+      `;
+        div.querySelector(".remove-btn").addEventListener("click", () => {
+          div.remove();
+          updateScheduleCount();
+        });
+        return div;
+      }
+
+      function populateForm(formData) {
+        const form = document.getElementById("config");
+        form.days.value = formData.days;
+        _selectedFishId = formData.fishId;
+        const container = document.getElementById("schedule-rows");
+        container.innerHTML = "";
+        for (const entry of formData.schedule) {
+          container.appendChild(createScheduleRow(entry));
+        }
+        updateScheduleCount();
+      }
+
+      function localSecsToUtcSecs(localSecs) {
+        const now = new Date();
+        const d = new Date(
+          Date.UTC(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            Math.floor(localSecs / 3600),
+            Math.floor((localSecs % 3600) / 60),
+          ),
+        );
+        return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60;
+      }
+
+      function readSchedule() {
+        const rows = document.querySelectorAll(
+          "#schedule-rows .schedule-row",
+        );
+        const result = [];
+        for (const row of rows) {
+          const selects = row.querySelectorAll("select");
+          const inputs = row.querySelectorAll("input[type=text]");
+          const dayVal = selects[0].value;
+          const startSec = localSecsToUtcSecs(timeToSecs(inputs[0].value));
+          let endSec = localSecsToUtcSecs(timeToSecs(inputs[1].value));
+          if (isNaN(startSec) || isNaN(endSec)) continue;
+          if (endSec <= startSec) endSec += 86400;
+          const entry = {startSec, endSec};
+          if (dayVal !== "") {
+            entry.dayOfWeek = parseInt(dayVal, 10);
+          }
+          result.push(entry);
+        }
+        return result;
+      }
+
+      function readForm() {
+        const form = document.getElementById("config");
+        return {
+          fishId: _selectedFishId || 0,
+          schedule: readSchedule(),
+          days: parseInt(form.days.value, 10) || 7,
+        };
+      }
+
+      async function query(formData) {
+        const elStatus = document.getElementById("status");
+        const elTbody = document.getElementById("tbody");
+        const elTable = document.getElementById("results");
+
+        elTbody.innerHTML = "";
+        elTable.style.display = "none";
+
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
+        const timeperiodSecs = BigInt(formData.days * 86400);
+
+        elStatus.textContent = `Querying windows over the next ${formData.days} day(s)...`;
+
+        const fishInfo = JSON.parse(await get_fish(formData.fishId));
+        _lastFishName = fishInfo.name;
+        document.getElementById("fish-info").textContent =
+          `Fish #${formData.fishId} — ${fishInfo.name}`;
+
+        const windowsJson = await get_fish_windows_in_schedule(
+          formData.fishId,
+          nowEorzea,
+          JSON.stringify(formData.schedule),
+          timeperiodSecs,
+        );
+        const windows = JSON.parse(windowsJson);
+        _lastWindows = windows;
+
+        elStatus.textContent = `Found ${windows.length} window(s) in the next ${formData.days} day(s).`;
+        elTable.style.display = "";
+        const dlBtn = document.getElementById("download-ics");
+        dlBtn.style.display = windows.length > 0 ? "" : "none";
+
+        if (windows.length === 0) {
+          const row = document.createElement("tr");
+          row.innerHTML =
+            '<td colspan="5">No windows found within the schedule.</td>';
+          elTbody.appendChild(row);
+          return;
+        }
+
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const fmtDate = (d) => d.toLocaleDateString();
+        const fmtTime = (d) => d.toLocaleTimeString();
+        const eoTime = (s) =>
+          s.split(" ")[1].split(":").slice(0, 2).join(":");
+
+        for (let i = 0; i < windows.length; i++) {
+          const w = windows[i];
+          const startUnix = Number(
+            unix_from_eorzea_time(BigInt(w.startEsec)),
+          );
+          const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+          const startD = new Date(startUnix * 1000);
+          const endD = new Date(endUnix * 1000);
+          const startDay = days[startD.getDay()];
+          const row = document.createElement("tr");
+          row.innerHTML = `
+        <td>${i + 1}</td>
+        <td>${startDay} ${fmtDate(startD)}</td>
+        <td>${fmtTime(startD)} - ${fmtTime(endD)}</td>
+        <td>${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}</td>
+        <td><button type="button" class="dl-single" data-idx="${i}">&#128197;&#11015;</button></td>
+      `;
+          elTbody.appendChild(row);
+        }
+      }
+
+      function fmtIcsDate(unixSecs) {
+        const d = new Date(unixSecs * 1000);
+        return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      }
+
+      function icsVevent(w) {
+        const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
+        const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+        return [
+          "BEGIN:VEVENT",
+          "DTSTART:" + fmtIcsDate(startUnix),
+          "DTEND:" + fmtIcsDate(endUnix),
+          "SUMMARY:" + _lastFishName + " Window",
+          "DESCRIPTION:ET: " + w.startDisplay + " - " + w.endDisplay,
+          "END:VEVENT",
+        ];
+      }
+
+      function downloadIcsFile(lines, filename) {
+        const blob = new Blob([lines.join("\r\n")], {
+          type: "text/calendar;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      function kebab(s) {
+        return s.toLowerCase().replace(/\s+/g, "-");
+      }
+
+      function downloadIcs() {
+        if (_lastWindows.length === 0) return;
+        const lines = [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//fish-schedule-tool//EN",
+        ];
+        for (const w of _lastWindows) {
+          lines.push(...icsVevent(w));
+        }
+        lines.push("END:VCALENDAR");
+        downloadIcsFile(
+          lines,
+          "fish-schedule-" + kebab(_lastFishName) + ".ics",
+        );
+      }
+
+      function downloadSingleIcs(idx) {
+        const w = _lastWindows[idx];
+        if (!w) return;
+        const lines = [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-//ffxivfishing//EN",
+          ...icsVevent(w),
+          "END:VCALENDAR",
+        ];
+        downloadIcsFile(
+          lines,
+          "window-" + (idx + 1) + "-" + kebab(_lastFishName) + ".ics",
+        );
+      }
+
+      async function lookupFishName(id) {
+        if (!id) return;
+        try {
+          const info = JSON.parse(await get_fish(id));
+          _selectedFishId = id;
+          document.getElementById("fish-search").value = info.name;
+          document.getElementById("selected-fish").textContent = "ID: " + id;
+        } catch { }
+      }
+
+      function setSelectedFish(id, name) {
+        _selectedFishId = id;
+        document.getElementById("fish-search").value = name;
+        document.getElementById("selected-fish").textContent = "ID: " + id;
+        document.getElementById("fish-results").style.display = "none";
+      }
+
+      async function main() {
+        document.getElementById("fish-info").textContent = "";
+        if (window.innerWidth <= 600) {
+          document
+            .getElementById("schedule-toggle")
+            .classList.add("collapsed");
+        }
+        const formData = getFormData();
+        populateForm(formData);
+        await lookupFishName(formData.fishId);
+
+        const elStatus = document.getElementById("status");
+        try {
+          elStatus.textContent = "Initializing WASM...";
+          await init();
+          await init_default();
+          await query(formData);
+        } catch (err) {
+          elStatus.className = "status error";
+          elStatus.textContent = `Error: ${err}`;
+        }
+      }
+
+      document
+        .getElementById("config")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const p = readForm();
+          if (p.schedule.length === 0) {
+            p.schedule.push({startSec: 0, endSec: 86400});
+          }
+          const elStatus = document.getElementById("status");
+          elStatus.className = "status";
+          try {
+            await query(p);
+            saveSearch(p);
+          } catch (err) {
+            elStatus.className = "status error";
+            elStatus.textContent = `Error: ${err}`;
+          }
+        });
+
+      document
+        .getElementById("add-schedule")
+        .addEventListener("click", () => {
+          const container = document.getElementById("schedule-rows");
+          container.appendChild(
+            createScheduleRow({startSec: 0, endSec: 86400}),
+          );
+          updateScheduleCount();
+        });
+
+      document
+        .getElementById("schedule-toggle")
+        .addEventListener("click", function () {
+          const content = document.getElementById("schedule-content");
+          const isMobile = window.innerWidth <= 600;
+          if (isMobile) {
+            content.classList.toggle("open");
+          } else {
+            content.classList.toggle("hidden");
+          }
+          this.classList.toggle("collapsed");
+        });
+
+      document
+        .getElementById("download-ics")
+        .addEventListener("click", downloadIcs);
+
+      document.getElementById("results").addEventListener("click", (e) => {
+        const btn = e.target.closest(".dl-single");
+        if (btn) downloadSingleIcs(parseInt(btn.dataset.idx, 10));
+      });
+
+      let searchTimer = null;
+      document.getElementById("fish-search").addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        const q = document.getElementById("fish-search").value.trim();
+        if (q.length < 2) {
+          document.getElementById("fish-results").style.display = "none";
+          return;
+        }
+        searchTimer = setTimeout(async () => {
+          try {
+            const raw = await search_fish(q);
+            const results = JSON.parse(raw);
+            const container = document.getElementById("fish-results");
+            container.innerHTML = "";
+            if (results.length === 0) {
+              container.style.display = "none";
+              return;
+            }
+            for (const r of results) {
+              const div = document.createElement("div");
+              div.textContent = `${r.name} (${r.id})`;
+              div.addEventListener("click", () =>
+                setSelectedFish(r.id, r.name),
+              );
+              container.appendChild(div);
+            }
+            container.style.display = "block";
+          } catch {
+            document.getElementById("fish-results").style.display = "none";
+          }
+        }, 200);
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".search-wrap")) {
+          document.getElementById("fish-results").style.display = "none";
+        }
+      });
+
+      main();
+    </script>
+  </div>
+  <footer>
+    FINAL FANTASY is a registered trademark of Square Enix Holdings Co.,
+    Ltd.<br />
+    FINAL FANTASY XIV &copy; 2010 - 2026 SQUARE ENIX CO., LTD. All Rights
+    Reserved.<br />
+    Fish data sourced from
+    <a
+      href="https://github.com/icykoneko/ff14-fish-tracker-app/blob/master/js/app/data.js">icykoneko/ff14-fish-tracker-app</a>
+    under the
+    <a href="https://raw.githubusercontent.com/icykoneko/ff14-fish-tracker-app/refs/heads/master/LICENSE">MIT
+      license</a>.
+  </footer>
+</body>
+
+</html>
