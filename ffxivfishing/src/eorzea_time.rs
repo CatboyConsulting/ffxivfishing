@@ -104,6 +104,10 @@ impl EorzeaTime {
         EorzeaTime { timestamp: secs }
     }
 
+    pub fn as_esecs(&self) -> u64 {
+        self.timestamp
+    }
+
     pub fn to_system_time(&self) -> SystemTime {
         SystemTime::UNIX_EPOCH
             + Duration::from_secs((self.timestamp as f64 / EORZEA_TIME_CONST).round() as u64)

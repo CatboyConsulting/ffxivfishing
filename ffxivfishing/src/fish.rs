@@ -250,6 +250,9 @@ impl FishingHole {
     pub fn name(&self) -> &str {
         &self.name
     }
+    pub fn region(&self) -> &Rc<Region> {
+        &self.region
+    }
 }
 
 impl Region {
@@ -258,6 +261,9 @@ impl Region {
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn weather(&self) -> &WeatherForecast {
+        &self.weather
     }
 }
 
@@ -311,6 +317,15 @@ impl FishData {
 
     pub fn fishes(&self) -> &Vec<Fish> {
         &self.fishes
+    }
+
+    pub fn search_fish(&self, query: &str) -> Vec<(u32, String)> {
+        let query_lower = query.to_lowercase();
+        self.fishes
+            .iter()
+            .filter(|f| f.name.to_lowercase().contains(&query_lower))
+            .map(|f| (f.id, f.name.clone()))
+            .collect()
     }
 }
 
