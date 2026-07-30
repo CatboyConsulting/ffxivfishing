@@ -170,39 +170,21 @@
 
     .remove-btn {
       margin-left: auto;
-      padding: 3px 8px;
-      font-size: 1rem;
+      background: none;
+      border: none;
+      color: var(--text-error);
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+    }
+
+    .remove-btn:hover {
+      color: #e08080;
     }
 
     @media (max-width: 600px) {
       .schedule-header {
         margin: 0.5rem 0 0.25rem;
-      }
-
-      .schedule-toggle {
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        font-size: 0.8rem;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-      }
-
-      .schedule-toggle:hover {
-        color: var(--text-heading);
-      }
-
-      .toggle-arrow {
-        font-size: 0.6rem;
-        transition: transform 0.15s;
-      }
-
-      .schedule-toggle.collapsed .toggle-arrow {
-        transform: rotate(-90deg);
       }
 
       .schedule-row {
@@ -292,6 +274,265 @@
       color: var(--text-heading);
     }
 
+    .save-window-btn {
+      background: none;
+      border: none;
+      padding: 2px 6px;
+      cursor: pointer;
+      display: inline-flex;
+      gap: 4px;
+      color: var(--text-accent);
+      font-size: 1rem;
+    }
+
+    .save-window-btn:hover {
+      color: var(--text-heading);
+    }
+
+    .save-window-btn.saved {
+      color: #6abf6a;
+    }
+
+    .saved-windows-section {
+      margin-top: 1rem;
+    }
+
+    .saved-windows-header,
+    .schedule-header,
+    .fav-fish-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+    }
+
+    .schedule-toggle,
+    .saved-windows-toggle,
+    .fav-fish-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .schedule-toggle:hover,
+    .saved-windows-toggle:hover,
+    .fav-fish-toggle:hover {
+      color: var(--text-heading);
+    }
+
+    .schedule-toggle .toggle-arrow,
+    .saved-windows-toggle .toggle-arrow,
+    .fav-fish-toggle .toggle-arrow {
+      font-size: 0.75rem;
+    }
+
+    .schedule-toggle.collapsed .toggle-arrow,
+    .saved-windows-toggle.collapsed .toggle-arrow,
+    .fav-fish-toggle.collapsed .toggle-arrow {
+      transform: rotate(-90deg);
+    }
+
+    #saved-windows-content {
+      display: block;
+    }
+
+    #saved-windows-content.hidden {
+      display: none;
+    }
+
+    .saved-window-item {
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-border);
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+
+    .saved-window-item .fish-name {
+      color: var(--text-accent);
+      font-weight: 600;
+      min-width: 120px;
+    }
+
+    .saved-window-item .window-time {
+      color: var(--text-primary);
+    }
+
+    .saved-window-item .remove-saved {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-error);
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+    }
+
+    .saved-window-item .remove-saved:hover {
+      color: #e08080;
+    }
+
+    .group-box {
+      background: var(--bg-medium);
+      border: 1px solid var(--bg-border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .group-box .group-content {
+      margin-top: 0.3rem;
+    }
+
+    #saved-windows-empty {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-style: italic;
+    }
+
+    .fav-fish-section {
+      margin-bottom: 0.5rem;
+    }
+
+    .fav-fish-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .fav-fish-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .fav-fish-toggle:hover {
+      color: var(--text-heading);
+    }
+
+    .fav-fish-toggle .toggle-arrow {
+      font-size: 0.6rem;
+    }
+
+    .fav-fish-toggle.collapsed .toggle-arrow {
+      transform: rotate(-90deg);
+    }
+
+    #fav-fish-content {
+      margin-top: 0.3rem;
+    }
+
+    #fav-fish-content.hidden {
+      display: none;
+    }
+
+    #fav-fish-list {
+      margin: 0.5rem 0;
+    }
+
+    .fav-fish-item {
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-border);
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+
+    .fav-fish-item .fav-name {
+      color: var(--text-accent);
+      font-weight: 600;
+      min-width: 120px;
+    }
+
+    .fav-fish-item .fav-search-btn {
+      background: var(--bg-primary);
+      color: var(--text-white);
+      border: none;
+      border-radius: 3px;
+      padding: 3px 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .fav-fish-item .fav-search-btn:hover {
+      filter: brightness(1.2);
+    }
+
+    .fav-fish-item .fav-remove-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-error);
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 0.9rem;
+    }
+
+    .fav-fish-item .fav-remove-btn:hover {
+      color: #e08080;
+    }
+
+    #fav-fish-empty {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-style: italic;
+    }
+
+    .fav-toggle-btn {
+      background: var(--bg-hover);
+      border: 1px solid var(--bg-border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .fav-toggle-btn:hover:not(:disabled) {
+      background: var(--bg-border);
+      color: var(--text-accent);
+    }
+
+    .fav-toggle-btn:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .fav-toggle-btn.faved {
+      color: #c9a86c;
+    }
+
+    .fav-toggle-btn.faved:hover:not(:disabled) {
+      color: #c9a86c;
+      background: var(--bg-border);
+    }
+
     footer a {
       color: var(--text-accent);
     }
@@ -310,14 +551,6 @@
     }
 
     @media (max-width: 600px) {
-      #schedule-content {
-        display: none;
-      }
-
-      #schedule-content.open {
-        display: block;
-      }
-
       .search-wrap input {
         width: 100%;
       }
@@ -329,6 +562,22 @@
   <div class="container">
     <h1>FFXIV Fishing - Schedule Tool</h1>
     <div id="fish-info" class="fish-info"></div>
+
+    <div class="saved-windows-section group-box">
+      <div class="saved-windows-header" id="saved-windows-header">
+        <button type="button" class="saved-windows-toggle collapsed" tabindex="-1">
+          <span class="toggle-arrow">&#9660;</span>
+          <span id="saved-windows-label">Saved Windows</span>
+        </button>
+      </div>
+      <div id="saved-windows-content" class="hidden group-content">
+        <div id="saved-windows-list"></div>
+        <div id="saved-windows-empty">No windows saved yet.</div>
+        <button id="download-saved-ics" type="button" class="download-btn" style="display: none">
+          Download all as .ics
+        </button>
+      </div>
+    </div>
 
     <form id="config">
       <div class="top-row">
@@ -342,22 +591,39 @@
           <input type="number" name="days" min="1" />
         </label>
       </div>
-
       <div class="selected-fish" id="selected-fish"></div>
 
-      <div class="schedule-header">
-        <button type="button" id="schedule-toggle" class="schedule-toggle">
-          <span id="schedule-label">Schedule entries</span>
-          <span class="toggle-arrow">&#9660;</span>
-        </button>
+      <div class="fav-fish-section group-box">
+        <div class="fav-fish-header" id="fav-fish-header">
+          <button type="button" class="fav-fish-toggle collapsed" tabindex="-1">
+            <span class="toggle-arrow">&#9660;</span>
+            <span id="fav-fish-label">Favourite Fish</span>
+          </button>
+        </div>
+        <div id="fav-fish-content" class="hidden group-content">
+          <div id="fav-fish-list"></div>
+          <div id="fav-fish-empty">No favourites yet.</div>
+        </div>
       </div>
-      <div id="schedule-content">
-        <div id="schedule-rows"></div>
-        <button type="button" id="add-schedule">+ Add schedule</button>
+
+      <div class="group-box">
+        <div class="schedule-header" id="schedule-header">
+          <button type="button" class="schedule-toggle collapsed" tabindex="-1">
+            <span class="toggle-arrow">&#9660;</span>
+            <span id="schedule-label">Schedule entries</span>
+          </button>
+        </div>
+        <div id="schedule-content" class="hidden group-content">
+          <div id="schedule-rows"></div>
+          <button type="button" id="add-schedule">+ Add schedule</button>
+        </div>
       </div>
 
       <div class="submit-row">
         <button type="submit" class="btn-primary">Search</button>
+        <button type="button" id="fav-toggle-btn" class="fav-toggle-btn" disabled title="Select a fish first">
+          &#9734;
+        </button>
       </div>
     </form>
 
@@ -375,7 +641,7 @@
       <tbody id="tbody"></tbody>
     </table>
     <button id="download-ics" type="button" class="download-btn" style="display: none">
-      Download .ics
+      Download all as .ics
     </button>
 
     <script type="module">
@@ -390,13 +656,13 @@
 
       const DAY_OPTIONS = [
         {value: "", label: "Any"},
-        {value: "0", label: "Sun"},
-        {value: "1", label: "Mon"},
-        {value: "2", label: "Tue"},
-        {value: "3", label: "Wed"},
-        {value: "4", label: "Thu"},
-        {value: "5", label: "Fri"},
-        {value: "6", label: "Sat"},
+        {value: "0", label: "Mon"},
+        {value: "1", label: "Tue"},
+        {value: "2", label: "Wed"},
+        {value: "3", label: "Thu"},
+        {value: "4", label: "Fri"},
+        {value: "5", label: "Sat"},
+        {value: "6", label: "Sun"},
       ];
 
       let _lastWindows = [];
@@ -486,7 +752,7 @@
         <label>End
           <input type="text" value="${secsToTime(entry.endSec)}" />
         </label>
-        <button type="button" class="remove-btn">x</button>
+        <button type="button" class="remove-btn" title="Remove">&#10005;</button>
       `;
         div.querySelector(".remove-btn").addEventListener("click", () => {
           div.remove();
@@ -580,7 +846,7 @@
           return;
         }
 
-        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         const fmtDate = (d) => d.toLocaleDateString();
         const fmtTime = (d) => d.toLocaleTimeString();
         const eoTime = (s) =>
@@ -601,10 +867,15 @@
         <td>${startDay} ${fmtDate(startD)}</td>
         <td>${fmtTime(startD)} - ${fmtTime(endD)}</td>
         <td>${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}</td>
-        <td><button type="button" class="dl-single" data-idx="${i}">&#128197;&#11015;</button></td>
+        <td>
+          <button type="button" class="save-window-btn" data-idx="${i}" title="Save window">&#128204;</button>
+          <button type="button" class="dl-single" data-idx="${i}">&#128197;&#11015;</button>
+        </td>
       `;
           elTbody.appendChild(row);
         }
+
+        updateSaveButtons();
       }
 
       function fmtIcsDate(unixSecs) {
@@ -612,15 +883,14 @@
         return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       }
 
-      function icsVevent(w) {
+      function icsVevent(w, fishName) {
         const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
         const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
         return [
           "BEGIN:VEVENT",
           "DTSTART:" + fmtIcsDate(startUnix),
           "DTEND:" + fmtIcsDate(endUnix),
-          "SUMMARY:" + _lastFishName + " Window",
-          "DESCRIPTION:ET: " + w.startDisplay + " - " + w.endDisplay,
+          "SUMMARY:" + (fishName || "Fish") + " Window",
           "END:VEVENT",
         ];
       }
@@ -639,41 +909,280 @@
         URL.revokeObjectURL(url);
       }
 
+      function downloadIcsCalendar(vevents, filename, prodid) {
+        const lines = [
+          "BEGIN:VCALENDAR",
+          "VERSION:2.0",
+          "PRODID:-" + (prodid || "//ffxivfishing//EN"),
+          ...vevents.flat(),
+          "END:VCALENDAR",
+        ];
+        downloadIcsFile(lines, filename);
+      }
+
       function kebab(s) {
         return s.toLowerCase().replace(/\s+/g, "-");
       }
 
       function downloadIcs() {
         if (_lastWindows.length === 0) return;
-        const lines = [
-          "BEGIN:VCALENDAR",
-          "VERSION:2.0",
-          "PRODID:-//fish-schedule-tool//EN",
-        ];
-        for (const w of _lastWindows) {
-          lines.push(...icsVevent(w));
-        }
-        lines.push("END:VCALENDAR");
-        downloadIcsFile(
-          lines,
+        downloadIcsCalendar(
+          _lastWindows.map((w) => icsVevent(w, _lastFishName)),
           "fish-schedule-" + kebab(_lastFishName) + ".ics",
+          "//fish-schedule-tool//EN",
         );
       }
 
       function downloadSingleIcs(idx) {
         const w = _lastWindows[idx];
         if (!w) return;
-        const lines = [
-          "BEGIN:VCALENDAR",
-          "VERSION:2.0",
-          "PRODID:-//ffxivfishing//EN",
-          ...icsVevent(w),
-          "END:VCALENDAR",
-        ];
-        downloadIcsFile(
-          lines,
+        downloadIcsCalendar(
+          [icsVevent(w, _lastFishName)],
           "window-" + (idx + 1) + "-" + kebab(_lastFishName) + ".ics",
         );
+      }
+
+      // ---- Saved Windows ----
+
+      const SAVED_WINDOWS_KEY = "savedWindows";
+
+      function getSavedWindows() {
+        try {
+          const raw = localStorage.getItem(SAVED_WINDOWS_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveWindowsToStorage(windows) {
+        try {
+          localStorage.setItem(SAVED_WINDOWS_KEY, JSON.stringify(windows));
+        } catch { }
+      }
+
+      function windowKey(w) {
+        return `${w.fishId}-${w.fishName}-${w.startEsec}-${w.endEsec}`;
+      }
+
+      function isWindowSaved(w) {
+        const saved = getSavedWindows();
+        const key = windowKey(w);
+        return saved.some((s) => windowKey(s) === key);
+      }
+
+      function saveWindow(w) {
+        const saved = getSavedWindows();
+        const key = windowKey(w);
+        if (saved.some((s) => windowKey(s) === key)) return;
+        saved.push(w);
+        saveWindowsToStorage(saved);
+        renderSavedWindows();
+        updateSaveButtons();
+      }
+
+      function removeSavedWindow(w) {
+        let saved = getSavedWindows();
+        const key = windowKey(w);
+        saved = saved.filter((s) => windowKey(s) !== key);
+        saveWindowsToStorage(saved);
+        renderSavedWindows();
+        updateSaveButtons();
+      }
+
+      function downloadSavedIcs() {
+        const saved = getSavedWindows();
+        if (saved.length === 0) return;
+        downloadIcsCalendar(
+          saved.map((w) => icsVevent(w, w.fishName)),
+          "saved-windows.ics",
+          "//saved-windows//EN",
+        );
+      }
+
+      function renderSavedWindows() {
+        const saved = getSavedWindows().sort((a, b) => {
+          const aSec = BigInt(a.startEsec);
+          const bSec = BigInt(b.startEsec);
+          if (aSec < bSec) return -1;
+          if (aSec > bSec) return 1;
+          return 0;
+        });
+        const container = document.getElementById("saved-windows-list");
+        const empty = document.getElementById("saved-windows-empty");
+        const label = document.getElementById("saved-windows-label");
+
+        container.innerHTML = "";
+
+        const dlBtn = document.getElementById("download-saved-ics");
+
+        if (saved.length === 0) {
+          empty.style.display = "";
+          label.textContent = "Saved Windows";
+          dlBtn.style.display = "none";
+          return;
+        }
+
+        empty.style.display = "none";
+        label.textContent = `Saved Windows (${saved.length})`;
+        dlBtn.style.display = "";
+
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+        for (const w of saved) {
+          const startUnix = Number(
+            unix_from_eorzea_time(BigInt(w.startEsec)),
+          );
+          const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+          const startD = new Date(startUnix * 1000);
+          const endD = new Date(endUnix * 1000);
+          const startDay = days[startD.getDay()];
+          const dateStr = startD.toLocaleDateString();
+          const timeStr = `${startD.toLocaleTimeString()} - ${endD.toLocaleTimeString()}`;
+          const eoStr = `${w.startDisplay.split(" ")[1].split(":").slice(0, 2).join(":")} - ${w.endDisplay.split(" ")[1].split(":").slice(0, 2).join(":")}`;
+
+          const div = document.createElement("div");
+          div.className = "saved-window-item";
+          div.innerHTML = `
+            <span class="fish-name">${w.fishName}</span>
+            <span class="window-day">${startDay} ${dateStr}</span>
+            <span class="window-time">${timeStr}</span>
+            <span class="window-eo">ET: ${eoStr}</span>
+            <button type="button" class="remove-saved" title="Remove saved window">&#10005;</button>
+          `;
+          div.querySelector(".remove-saved").addEventListener("click", () => {
+            removeSavedWindow(w);
+          });
+          container.appendChild(div);
+        }
+      }
+
+      function updateSaveButtons() {
+        const saved = getSavedWindows();
+        document.querySelectorAll(".save-window-btn").forEach((btn) => {
+          const idx = parseInt(btn.dataset.idx, 10);
+          const selected = _lastWindows[idx];
+          if (selected) {
+            const selectedWindow = {
+              ...selected,
+              fishId: _selectedFishId,
+              fishName: _lastFishName,
+            };
+            if (isWindowSaved(selectedWindow)) {
+              btn.classList.add("saved");
+              btn.title = "Remove saved window";
+            } else {
+              btn.classList.remove("saved");
+              btn.title = "Save window";
+            }
+          }
+        });
+      }
+
+      // ---- Favourite Fish ----
+
+      const FAV_KEY = "favFish";
+
+      function getFavFish() {
+        try {
+          const raw = localStorage.getItem(FAV_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveFavFish(list) {
+        try {
+          localStorage.setItem(FAV_KEY, JSON.stringify(list));
+        } catch { }
+      }
+
+      function isFavFish(id) {
+        return getFavFish().some((f) => f.id === id);
+      }
+
+      function toggleFavFish(id, name) {
+        let list = getFavFish();
+        const idx = list.findIndex((f) => f.id === id);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+        } else {
+          list.push({id, name});
+        }
+        saveFavFish(list);
+        renderFavFish();
+        updateFavToggleBtn();
+      }
+
+      function renderFavFish() {
+        const list = getFavFish();
+        const container = document.getElementById("fav-fish-list");
+        const empty = document.getElementById("fav-fish-empty");
+        const label = document.getElementById("fav-fish-label");
+
+        container.innerHTML = "";
+
+        if (list.length === 0) {
+          empty.style.display = "";
+          label.textContent = "Favourite Fish";
+          return;
+        }
+
+        empty.style.display = "none";
+        label.textContent = `Favourite Fish (${list.length})`;
+
+        for (const f of list) {
+          const div = document.createElement("div");
+          div.className = "fav-fish-item";
+          div.innerHTML = `
+            <span class="fav-name">${f.name}</span>
+            <button type="button" class="fav-search-btn" data-id="${f.id}" data-name="${f.name}">Search</button>
+            <button type="button" class="fav-remove-btn" data-id="${f.id}" title="Remove favourite">&#10005;</button>
+          `;
+          div
+            .querySelector(".fav-search-btn")
+            .addEventListener("click", (e) => {
+              e.stopPropagation();
+              const id = parseInt(e.target.dataset.id, 10);
+              const name = e.target.dataset.name;
+              selectAndSearchFav(id, name);
+            });
+          div
+            .querySelector(".fav-remove-btn")
+            .addEventListener("click", (e) => {
+              e.stopPropagation();
+              const id = parseInt(e.target.dataset.id, 10);
+              toggleFavFish(id, "");
+            });
+          container.appendChild(div);
+        }
+      }
+
+      function selectAndSearchFav(id, name) {
+        setSelectedFish(id, name);
+        const form = document.getElementById("config");
+        form.dispatchEvent(new Event("submit", {cancelable: true}));
+      }
+
+      function updateFavToggleBtn() {
+        const btn = document.getElementById("fav-toggle-btn");
+        if (!_selectedFishId) {
+          btn.disabled = true;
+          btn.title = "Select a fish first";
+          btn.innerHTML = "&#9734;";
+          btn.classList.remove("faved");
+          return;
+        }
+        btn.disabled = false;
+        const faved = isFavFish(_selectedFishId);
+        btn.classList.toggle("faved", faved);
+        btn.innerHTML = faved ? "&#9733;" : "&#9734;";
+        btn.title = faved ? "Remove favourite" : "Add favourite";
       }
 
       async function lookupFishName(id) {
@@ -683,6 +1192,7 @@
           _selectedFishId = id;
           document.getElementById("fish-search").value = info.name;
           document.getElementById("selected-fish").textContent = "ID: " + id;
+          updateFavToggleBtn();
         } catch { }
       }
 
@@ -691,24 +1201,23 @@
         document.getElementById("fish-search").value = name;
         document.getElementById("selected-fish").textContent = "ID: " + id;
         document.getElementById("fish-results").style.display = "none";
+        updateFavToggleBtn();
       }
 
       async function main() {
         document.getElementById("fish-info").textContent = "";
-        if (window.innerWidth <= 600) {
-          document
-            .getElementById("schedule-toggle")
-            .classList.add("collapsed");
-        }
         const formData = getFormData();
         populateForm(formData);
-        await lookupFishName(formData.fishId);
 
         const elStatus = document.getElementById("status");
         try {
           elStatus.textContent = "Initializing WASM...";
           await init();
           await init_default();
+          renderSavedWindows();
+          renderFavFish();
+          await lookupFishName(formData.fishId);
+          updateFavToggleBtn();
           await query(formData);
         } catch (err) {
           elStatus.className = "status error";
@@ -746,25 +1255,72 @@
         });
 
       document
-        .getElementById("schedule-toggle")
+        .getElementById("schedule-header")
         .addEventListener("click", function () {
           const content = document.getElementById("schedule-content");
-          const isMobile = window.innerWidth <= 600;
-          if (isMobile) {
-            content.classList.toggle("open");
-          } else {
-            content.classList.toggle("hidden");
-          }
-          this.classList.toggle("collapsed");
+          content.classList.toggle("hidden");
+          this.querySelector(".schedule-toggle").classList.toggle(
+            "collapsed",
+          );
         });
 
       document
         .getElementById("download-ics")
         .addEventListener("click", downloadIcs);
 
+      document
+        .getElementById("download-saved-ics")
+        .addEventListener("click", downloadSavedIcs);
+
+      document
+        .getElementById("saved-windows-header")
+        .addEventListener("click", function () {
+          const content = document.getElementById("saved-windows-content");
+          content.classList.toggle("hidden");
+          this.querySelector(".saved-windows-toggle").classList.toggle(
+            "collapsed",
+          );
+        });
+
+      document
+        .getElementById("fav-fish-header")
+        .addEventListener("click", function () {
+          const content = document.getElementById("fav-fish-content");
+          content.classList.toggle("hidden");
+          this.querySelector(".fav-fish-toggle").classList.toggle(
+            "collapsed",
+          );
+        });
+
+      document
+        .getElementById("fav-toggle-btn")
+        .addEventListener("click", () => {
+          if (_selectedFishId) {
+            const name = document.getElementById("fish-search").value;
+            toggleFavFish(_selectedFishId, name);
+          }
+        });
+
       document.getElementById("results").addEventListener("click", (e) => {
-        const btn = e.target.closest(".dl-single");
-        if (btn) downloadSingleIcs(parseInt(btn.dataset.idx, 10));
+        const dlBtn = e.target.closest(".dl-single");
+        if (dlBtn) downloadSingleIcs(parseInt(dlBtn.dataset.idx, 10));
+        const saveBtn = e.target.closest(".save-window-btn");
+        if (saveBtn) {
+          const idx = parseInt(saveBtn.dataset.idx, 10);
+          const w = _lastWindows[idx];
+          if (w) {
+            const wWithMeta = {
+              ...w,
+              fishId: _selectedFishId,
+              fishName: _lastFishName,
+            };
+            if (isWindowSaved(wWithMeta)) {
+              removeSavedWindow(wWithMeta);
+            } else {
+              saveWindow(wWithMeta);
+            }
+          }
+        }
       });
 
       let searchTimer = null;
