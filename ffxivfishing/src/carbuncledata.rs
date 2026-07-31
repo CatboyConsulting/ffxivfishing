@@ -18,6 +18,18 @@ enum OneOrVec<T> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct CarbuncleZone {
+    #[serde(rename = "name_en")]
+    name_en: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CarbuncleRegion {
+    #[serde(rename = "name_en")]
+    name_en: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct CarbuncleData {
     #[serde(rename = "FISH")]
     fishes: HashMap<String, CarbuncleFish>,
@@ -27,6 +39,10 @@ struct CarbuncleData {
     fishing_spots: HashMap<String, CarbuncleFishingSpot>,
     #[serde(rename = "ITEMS")]
     items: HashMap<String, CarbuncleItem>,
+    #[serde(rename = "ZONES")]
+    zones: HashMap<String, CarbuncleZone>,
+    #[serde(rename = "REGIONS")]
+    regions: HashMap<String, CarbuncleRegion>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -126,11 +142,10 @@ impl From<&CarbuncleWeatherRates> for WeatherForecast {
 }
 
 impl CarbuncleFishingSpot {
-    fn to_fishinghole(&self, regions: &[Rc<Region>]) -> Option<FishingHole> {
-        let region = regions
-            .iter()
-            .find(|r| r.name() == self.territory_id.to_string())?;
-        Some(FishingHole::new(self.id.to_string(), region.clone()))
+    fn to_fishinghole(&self, regions: &[Rc<Region>], wr_key_to_idx: &HashMap<String, usize>) -> Option<FishingHole> {
+        let idx = wr_key_to_idx.get(&self.territory_id.to_string())?;
+        let region = regions.get(*idx)?.clone();
+        Some(FishingHole::new(self.name.clone(), region))
     }
 }
 
@@ -181,7 +196,10 @@ impl CarbuncleFish {
             false,
             false,
             self.fish_eyes,
-            (self.patch.trunc() as u8, self.patch.fract() as u8),
+            (
+                ((self.patch * 100.0).round() as u16 / 100) as u8,
+                ((self.patch * 100.0).round() as u16 % 100) as u8,
+            ),
         ))
     }
 }
@@ -243,15 +261,28 @@ impl CarbuncleData {
 
         let items: Vec<&CarbuncleItem> = self.items.values().collect();
 
+        let wr_key_to_idx: HashMap<String, usize> = weather_rates
+            .keys()
+            .enumerate()
+            .map(|(i, k)| (k.clone(), i))
+            .collect();
+
         let regions: Vec<Rc<Region>> = weather_rates
             .iter()
-            .map(|(id, w)| Rc::new(Region::new(id.to_string(), w.clone())))
+            .map(|(id, w)| {
+                let zone_name = self
+                    .zones
+                    .get(id)
+                    .map(|z| z.name_en.clone())
+                    .unwrap_or_else(|| id.clone());
+                Rc::new(Region::new(zone_name, w.clone()))
+            })
             .collect();
 
         let fishing_holes: Vec<Rc<FishingHole>> = self
             .fishing_spots
             .values()
-            .filter_map(|fs| fs.to_fishinghole(&regions))
+            .filter_map(|fs| fs.to_fishinghole(&regions, &wr_key_to_idx))
             .map(Rc::new)
             .collect();
 
