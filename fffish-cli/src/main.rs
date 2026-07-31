@@ -200,13 +200,16 @@ impl App {
                     .fishes()
                     .iter()
                     .filter(|f| f.name.contains(self.input.value()))
-                    .map(|f| FishListItem {
-                        name: f.name().to_string(),
-                        id: f.id,
-                        bait: self.fish_data.item_by_id(f.bait_id().unwrap()).cloned(),
-                        next_window: f.next_window(EorzeaTime::now(), true, 1_000).unwrap(),
-                        favourite: self.is_favourite(f.id),
-                        caught: self.is_caught(f.id),
+                    .filter_map(|f| {
+                        let next_window = f.next_window(EorzeaTime::now(), true, 1_000)?;
+                        Some(FishListItem {
+                            name: f.name().to_string(),
+                            id: f.id,
+                            bait: f.bait_id().and_then(|id| self.fish_data.item_by_id(id)).cloned(),
+                            next_window,
+                            favourite: self.is_favourite(f.id),
+                            caught: self.is_caught(f.id),
+                        })
                     })
                     .filter(|item| self.is_displayed(item, &self.list_filter))
                     .collect();

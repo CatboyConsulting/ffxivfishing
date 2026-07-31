@@ -145,7 +145,7 @@ impl CarbuncleFishingSpot {
     fn to_fishinghole(&self, regions: &[Rc<Region>], wr_key_to_idx: &HashMap<String, usize>) -> Option<FishingHole> {
         let idx = wr_key_to_idx.get(&self.territory_id.to_string())?;
         let region = regions.get(*idx)?.clone();
-        Some(FishingHole::new(self.name.clone(), region))
+        Some(FishingHole::new(self.id, self.name.clone(), region))
     }
 }
 
@@ -160,9 +160,10 @@ impl CarbuncleFish {
     }
 
     fn to_fish(&self, fishing_holes: &[Rc<FishingHole>], items: &[&CarbuncleItem]) -> Option<Fish> {
+        let loc = self.location?;
         let fish_hole = fishing_holes
             .iter()
-            .find(|fh| fh.name() == self.location.unwrap_or(0).to_string())?;
+            .find(|fh| fh.id() == loc)?;
         let item = items.iter().find(|i| self.id == i.id)?;
 
         let bait = match self.best_catch_path.last() {
@@ -269,13 +270,14 @@ impl CarbuncleData {
 
         let regions: Vec<Rc<Region>> = weather_rates
             .iter()
-            .map(|(id, w)| {
+            .map(|(id, wf)| {
                 let zone_name = self
-                    .zones
+                    .weather_rates
                     .get(id)
+                    .and_then(|cwr| self.zones.get(&cwr.zone_id.to_string()))
                     .map(|z| z.name_en.clone())
                     .unwrap_or_else(|| id.clone());
-                Rc::new(Region::new(zone_name, w.clone()))
+                Rc::new(Region::new(zone_name, wf.clone()))
             })
             .collect();
 
@@ -333,6 +335,29 @@ mod tests {
             let eorzea_weather: WeatherForecast = (&w).into();
             let _ = eorzea_weather.weather_at(EorzeaTime::from_time(&SystemTime::now()).unwrap());
         }
+    }
+
+    #[test]
+    fn fish_location_names() {
+        let data = parse_data().unwrap();
+        let fishes = data.convert_to_fishdata();
+        let mut numeric_loc = 0;
+        let mut numeric_reg = 0;
+        for fish in fishes.fishes().iter().take(10) {
+            let loc = fish.location.name();
+            let reg = fish.location.region().name();
+            println!("fish={}, location='{}', region='{}'", fish.name, loc, reg);
+            if loc.chars().all(|c| c.is_ascii_digit()) { numeric_loc += 1; }
+            if reg.chars().all(|c| c.is_ascii_digit()) { numeric_reg += 1; }
+        }
+        for fish in fishes.fishes() {
+            if fish.location.name().chars().all(|c| c.is_ascii_digit()) { numeric_loc += 1; }
+            if fish.location.region().name().chars().all(|c| c.is_ascii_digit()) { numeric_reg += 1; }
+        }
+        println!("Fish with numeric locations: {}", numeric_loc);
+        println!("Fish with numeric regions: {}", numeric_reg);
+        assert!(numeric_loc < 10, "Too many numeric locations");
+        assert!(numeric_reg < 10, "Too many numeric regions");
     }
 
     #[test]

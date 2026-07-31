@@ -17,6 +17,7 @@ pub struct Region {
 
 #[derive(Debug)]
 pub struct FishingHole {
+    id: u32,
     name: String,
     region: Rc<Region>,
 }
@@ -244,8 +245,11 @@ impl Fish {
 }
 
 impl FishingHole {
-    pub fn new(name: String, region: Rc<Region>) -> FishingHole {
-        FishingHole { name, region }
+    pub fn new(id: u32, name: String, region: Rc<Region>) -> FishingHole {
+        FishingHole { id, name, region }
+    }
+    pub fn id(&self) -> u32 {
+        self.id
     }
     pub fn name(&self) -> &str {
         &self.name
@@ -340,6 +344,7 @@ mod tests {
             vec![(50, Weather::Clouds), (100, Weather::Sunny)],
         );
         let fishing_hole = FishingHole {
+            id: 0,
             name: "Fishing Hole".to_string(),
             region: Rc::new(Region {
                 name: "Region".to_string(),
@@ -380,6 +385,7 @@ mod tests {
             vec![(50, Weather::Clouds), (100, Weather::Sunny)],
         );
         let fishing_hole = FishingHole {
+            id: 0,
             name: "Fishing Hole".to_string(),
             region: Rc::new(Region {
                 name: "Region".to_string(),
@@ -420,6 +426,7 @@ mod tests {
             vec![(50, Weather::Clouds), (100, Weather::Sunny)],
         );
         let fishing_hole = FishingHole {
+            id: 0,
             name: "Fishing Hole".to_string(),
             region: Rc::new(Region {
                 name: "Region".to_string(),
