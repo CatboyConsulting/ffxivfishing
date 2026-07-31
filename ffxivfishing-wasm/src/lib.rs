@@ -31,7 +31,7 @@ struct FishInfo {
     window_start: String,
     window_end: String,
     weather_set: Vec<String>,
-    patch: (u8, u8),
+    patch: String,
 }
 
 #[derive(Serialize)]
@@ -103,6 +103,12 @@ fn with_fish_data<T>(f: impl FnOnce(&FishData) -> Result<T, JsValue>) -> Result<
 }
 
 fn fish_to_info(fish: &Fish) -> FishInfo {
+    let p = fish.patch;
+    let patch_str = if p.1.is_multiple_of(10) {
+        format!("{}.{}", p.0, p.1 / 10)
+    } else {
+        format!("{}.{}", p.0, p.1)
+    };
     FishInfo {
         id: fish.id,
         name: fish.name.clone(),
@@ -114,7 +120,7 @@ fn fish_to_info(fish: &Fish) -> FishInfo {
         window_start: fish.window_start.to_string(),
         window_end: fish.window_end.to_string(),
         weather_set: fish.weather_set.iter().map(weather_to_string).collect(),
-        patch: fish.patch,
+        patch: patch_str,
     }
 }
 
@@ -335,6 +341,14 @@ pub fn list_all_fish() -> Result<String, JsValue> {
                 name: f.name.clone(),
             })
             .collect();
+        serde_json::to_string(&results).map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
+pub fn list_all_fish_info() -> Result<String, JsValue> {
+    with_fish_data(|fd| {
+        let results: Vec<FishInfo> = fd.fishes().iter().map(|f| fish_to_info(f)).collect();
         serde_json::to_string(&results).map_err(|e| JsValue::from_str(&e.to_string()))
     })
 }
