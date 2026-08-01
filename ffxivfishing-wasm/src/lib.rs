@@ -9,7 +9,6 @@ use ffxivfishing::{
     carbuncledata,
     eorzea_time::EorzeaTime,
     fish::{Fish, FishData},
-    weather::Weather,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -30,6 +29,7 @@ struct FishInfo {
     bait_id: Option<u32>,
     window_start: String,
     window_end: String,
+    previous_weather_set: Vec<String>,
     weather_set: Vec<String>,
     patch: String,
 }
@@ -81,19 +81,6 @@ struct ScheduleEntry {
     end_sec: u64,
 }
 
-fn weather_to_string(w: &Weather) -> String {
-    match w {
-        Weather::Unknown => "Unknown".to_string(),
-        Weather::Id(id) => format!("Id({})", id),
-        Weather::Sunny => "Sunny".to_string(),
-        Weather::Clouds => "Clouds".to_string(),
-        Weather::ClearSkies => "ClearSkies".to_string(),
-        Weather::FairSkies => "FairSkies".to_string(),
-        Weather::Fog => "Fog".to_string(),
-        Weather::Wind => "Wind".to_string(),
-    }
-}
-
 fn with_fish_data<T>(f: impl FnOnce(&FishData) -> Result<T, JsValue>) -> Result<T, JsValue> {
     FISH_DATA.with(|cell| {
         cell.get()
@@ -102,7 +89,7 @@ fn with_fish_data<T>(f: impl FnOnce(&FishData) -> Result<T, JsValue>) -> Result<
     })
 }
 
-fn fish_to_info(fish: &Fish) -> FishInfo {
+fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     let p = fish.patch;
     let patch_str = if p.1.is_multiple_of(10) {
         format!("{}.{}", p.0, p.1 / 10)
@@ -119,7 +106,8 @@ fn fish_to_info(fish: &Fish) -> FishInfo {
         bait_id: fish.bait_id(),
         window_start: fish.window_start.to_string(),
         window_end: fish.window_end.to_string(),
-        weather_set: fish.weather_set.iter().map(weather_to_string).collect(),
+        previous_weather_set: fish.previous_weather_set.iter().map(|w| fd.weather_name(w)).collect(),
+        weather_set: fish.weather_set.iter().map(|w| fd.weather_name(w)).collect(),
         patch: patch_str,
     }
 }
@@ -210,7 +198,7 @@ pub fn get_fish(fish_id: u32) -> Result<String, JsValue> {
         let fish = fd
             .fish_by_id(fish_id)
             .ok_or_else(|| JsValue::from_str("Fish not found"))?;
-        serde_json::to_string(&fish_to_info(fish)).map_err(|e| JsValue::from_str(&e.to_string()))
+        serde_json::to_string(&fish_to_info(fish, fd)).map_err(|e| JsValue::from_str(&e.to_string()))
     })
 }
 
@@ -310,7 +298,7 @@ pub fn get_weather_at_fish(fish_id: u32, timestamp_esec: u64) -> Result<String, 
         let eorzea_time = EorzeaTime::from_esecs(timestamp_esec);
         let weather = fish.location.region().weather().weather_at(eorzea_time);
         let info = WeatherInfo {
-            weather: weather_to_string(weather),
+            weather: fd.weather_name(weather),
             timestamp_esec,
             timestamp_display: eorzea_time.to_string(),
         };
@@ -348,7 +336,7 @@ pub fn list_all_fish() -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn list_all_fish_info() -> Result<String, JsValue> {
     with_fish_data(|fd| {
-        let results: Vec<FishInfo> = fd.fishes().iter().map(|f| fish_to_info(f)).collect();
+        let results: Vec<FishInfo> = fd.fishes().iter().map(|f| fish_to_info(f, fd)).collect();
         serde_json::to_string(&results).map_err(|e| JsValue::from_str(&e.to_string()))
     })
 }

@@ -1,4 +1,5 @@
-use std::{collections::HashMap, error::Error, rc::Rc, time::Duration};
+use std::collections::HashMap;
+use std::{error::Error, rc::Rc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,14 @@ struct CarbuncleData {
     zones: HashMap<String, CarbuncleZone>,
     #[serde(rename = "REGIONS")]
     regions: HashMap<String, CarbuncleRegion>,
+    #[serde(rename = "WEATHER_TYPES")]
+    weather_types: HashMap<String, CarbuncleWeatherType>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct CarbuncleWeatherType {
+    #[serde(rename = "name_en")]
+    name_en: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -253,6 +262,11 @@ fn parse_data() -> Result<CarbuncleData, serde_json::Error> {
 
 impl CarbuncleData {
     fn convert_to_fishdata(&self) -> FishData {
+        let weather_names: HashMap<u32, String> = self
+            .weather_types
+            .iter()
+            .map(|(id, wt)| (id.parse().unwrap_or(0), wt.name_en.clone()))
+            .collect();
         let weather_rates: HashMap<String, WeatherForecast> = self
             .weather_rates
             .clone()
@@ -297,7 +311,7 @@ impl CarbuncleData {
             .iter()
             .map(|item| item.to_fishing_item(&fishes))
             .collect();
-        FishData::new(fishes, fishing_holes, regions, fishing_items)
+        FishData::new(fishes, fishing_holes, regions, fishing_items, weather_names)
     }
 }
 

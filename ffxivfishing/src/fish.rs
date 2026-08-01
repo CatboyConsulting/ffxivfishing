@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::Display,
     rc::Rc,
     time::{Duration, SystemTime},
@@ -296,6 +297,7 @@ pub struct FishData {
     fishing_holes: Vec<Rc<FishingHole>>,
     regions: Vec<Rc<Region>>,
     items: Vec<FishingItem>,
+    weather_names: HashMap<u32, String>,
 }
 
 impl FishData {
@@ -304,12 +306,31 @@ impl FishData {
         fishing_holes: Vec<Rc<FishingHole>>,
         regions: Vec<Rc<Region>>,
         items: Vec<FishingItem>,
+        weather_names: HashMap<u32, String>,
     ) -> FishData {
         FishData {
             fishes,
             fishing_holes,
             regions,
             items,
+            weather_names,
+        }
+    }
+
+    pub fn weather_name(&self, w: &Weather) -> String {
+        match w {
+            Weather::Unknown => "Unknown".to_string(),
+            Weather::Id(id) => self
+                .weather_names
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| format!("Id({})", id)),
+            Weather::Sunny => "Sunny".to_string(),
+            Weather::Clouds => "Clouds".to_string(),
+            Weather::ClearSkies => "Clear Skies".to_string(),
+            Weather::FairSkies => "Fair Skies".to_string(),
+            Weather::Fog => "Fog".to_string(),
+            Weather::Wind => "Wind".to_string(),
         }
     }
     pub fn item_by_id(&self, id: u32) -> Option<&FishingItem> {
