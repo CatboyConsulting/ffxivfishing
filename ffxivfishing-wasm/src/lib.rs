@@ -203,6 +203,29 @@ pub fn get_fish(fish_id: u32) -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn get_fish_next_window(fish_id: u32, timestamp_esec: u64) -> Result<String, JsValue> {
+    with_fish_data(|fd| {
+        let fish = fd
+            .fish_by_id(fish_id)
+            .ok_or_else(|| JsValue::from_str("Fish not found"))?;
+        let eorzea_time = EorzeaTime::from_esecs(timestamp_esec);
+        let max_lookahead = 10000u32;
+        let window = fish.next_window(eorzea_time, false, max_lookahead);
+        match window {
+            Some(fw) => serde_json::to_string(&Some(FishWindow {
+                start_esec: fw.start().as_esecs(),
+                end_esec: fw.end().as_esecs(),
+                start_display: fw.start().to_string(),
+                end_display: fw.end().to_string(),
+                duration_esec: fw.duration().total_seconds(),
+            })),
+            None => serde_json::to_string::<Option<FishWindow>>(&None),
+        }
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
 pub fn get_fish_windows(fish_id: u32, timestamp_esec: u64, limit: u32) -> Result<String, JsValue> {
     with_fish_data(|fd| {
         let fish = fd
