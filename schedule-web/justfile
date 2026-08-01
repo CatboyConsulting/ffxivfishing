@@ -2,7 +2,7 @@ build:
     wasm-pack build ../ffxivfishing-wasm --target web --out-dir pkg
 
 dist: build
-    mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html dist/
+    mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html favicon.ico dist/
 
 deploy: dist
     wrangler pages deploy dist --project-name ffxivfishing
