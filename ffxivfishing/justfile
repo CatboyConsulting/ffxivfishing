@@ -1,0 +1,4 @@
+update-data:
+    curl -sL 'https://raw.githubusercontent.com/icykoneko/ff14-fish-tracker-app/refs/heads/master/js/app/data.js' \
+      | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{eval(d.replace('const DATA','globalThis.DATA'));console.log(JSON.stringify(globalThis.DATA))})" \
+      > ./src/data.json
