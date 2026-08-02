@@ -7,115 +7,52 @@
   <title>FFXIV Fishing Schedule Tool</title>
   <style>
     :root {
-      --bg-dark: #1a1822;
-      --bg-medium: #24212e;
-      --bg-hover: #2e2a3a;
-      --bg-border: #3a3645;
-      --bg-error: #2e1414;
-      --bg-primary: #4e7a4e;
+      --bg-dark: #14141e;
+      --bg-medium: #1e1e2c;
+      --bg-hover: #28283a;
+      --bg-border: #3a3a4e;
+      --bg-error: #1e0a0a;
+      --bg-primary: #4aaa9a;
       --text-primary: #e8e0d0;
-      --text-heading: #f0e8d8;
-      --text-accent: #c9a86c;
-      --text-muted: #9a9488;
-      --text-error: #c96060;
-      --text-white: #fff;
+      --text-heading: #f8f0e0;
+      --text-accent: #f0c84a;
+      --text-muted: #9a9288;
+      --text-error: #d45a4a;
+      --text-white: #ffffff;
+    }
+
+    * {
+      border-radius: 0 !important;
     }
 
     body {
       font-family:
-        system-ui,
-        -apple-system,
-        sans-serif;
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+        Cantarell, sans-serif;
       background: var(--bg-dark);
       color: var(--text-primary);
       margin: 0;
       padding: 0;
+      font-size: 15px;
+      line-height: 1.5;
     }
 
     .container {
       max-width: 960px;
       margin: 0 auto;
-      padding: 1.5rem 1rem;
+      padding: 1rem;
     }
 
     h1 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      margin: 0 0 0.25rem;
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
       color: var(--text-heading);
     }
 
-    .fish-info {
-      font-size: 0.9rem;
-      color: var(--text-accent);
-      margin-bottom: 0.75rem;
-    }
-
     form {
-      background: var(--bg-medium);
       border: 1px solid var(--bg-border);
-      border-radius: 6px;
       padding: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .top-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: end;
-      margin-bottom: 0.5rem;
-    }
-
-    .top-row label {
-      display: flex;
-      flex-direction: column;
-      font-size: 1rem;
-      font-weight: 500;
-      color: var(--text-muted);
-    }
-
-    .top-row input,
-    .top-row select {
-      margin-top: 2px;
-    }
-
-    .search-wrap {
-      position: relative;
-    }
-
-    .search-wrap input {
-      width: 240px;
-    }
-
-    .search-results {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--bg-medium);
-      border: 1px solid var(--bg-border);
-      border-top: none;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 10;
-      display: none;
-    }
-
-    .search-results div {
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 1rem;
-    }
-
-    .search-results div:hover {
-      background: var(--bg-hover);
-    }
-
-    .selected-fish {
-      font-size: 0.8rem;
-      color: var(--text-accent);
-      margin-bottom: 0.5rem;
     }
 
     input[type="text"],
@@ -123,30 +60,214 @@
     select,
     button {
       font-family: inherit;
-      font-size: 1rem;
+      font-size: 0.9rem;
       background: var(--bg-dark);
       color: var(--text-primary);
       border: 1px solid var(--bg-border);
-      border-radius: 4px;
-      padding: 4px 8px;
+      padding: 5px 8px;
     }
 
     button {
-      background: var(--bg-hover);
+      background: var(--bg-medium);
       cursor: pointer;
-      font-weight: 500;
+      font-weight: 600;
+      border: 1px solid var(--bg-border);
     }
 
     button:hover {
-      background: var(--bg-border);
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
     }
 
-    .schedule-row {
-      background: var(--bg-dark);
-      border: 1px solid var(--bg-border);
-      border-radius: 4px;
+    .btn-primary {
+      font-weight: 700;
+      padding: 5px 18px;
+    }
+
+    .status {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: 0.5rem 0;
+    }
+
+    .status.error {
+      color: var(--text-error);
+      background: var(--bg-error);
       padding: 0.5rem;
-      margin-bottom: 0.4rem;
+      border: 1px solid var(--text-error);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--bg-border);
+      padding: 5px 9px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-medium);
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      color: var(--text-primary);
+    }
+
+    /* ---- saved windows ---- */
+    .saved-windows-section {
+      margin-bottom: 0.5rem;
+    }
+
+    #saved-content {
+      border: 1px solid var(--bg-border);
+      padding: 0.3rem;
+    }
+
+    #saved-windows-list .saved-item {
+      display: flex;
+      align-items: start;
+      gap: 0.5rem;
+      padding: 0.3rem 0.5rem;
+      border-bottom: 1px solid var(--bg-border);
+      font-size: 0.9rem;
+    }
+
+    #saved-windows-list .saved-item:last-child {
+      border-bottom: none;
+    }
+
+    #saved-windows-list .saved-item:hover {
+      background: var(--bg-hover);
+    }
+
+    #saved-windows-list .saved-item.past {
+      opacity: 0.35;
+    }
+
+    #saved-windows-list .saved-item.ongoing {
+      background: rgba(74, 170, 154, 0.08);
+    }
+
+    #saved-windows-list .saved-item .saved-body {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+    }
+
+    #saved-windows-list .saved-item .saved-top-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #saved-windows-list .saved-item .fish-name {
+      color: var(--text-accent);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #saved-windows-list .saved-item .window-when {
+      white-space: nowrap;
+      color: var(--text-primary);
+    }
+
+    #saved-windows-list .saved-item .saved-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 0.3rem;
+      flex-shrink: 0;
+    }
+
+    #saved-windows-list .saved-item .window-detail {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 1px;
+    }
+
+    #saved-windows-list .saved-item .remove-saved {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 0.9rem;
+      color: var(--text-error);
+    }
+
+    #saved-windows-list .saved-item .remove-saved:hover {
+      color: var(--text-error);
+      background: var(--bg-hover);
+    }
+
+    #saved-windows-empty {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-style: italic;
+    }
+
+    .download-btn {
+      margin-top: 0.25rem;
+      font-size: 0.85rem;
+    }
+
+    /* ---- config toggle ---- */
+    .config-section {
+      margin-bottom: 0.5rem;
+    }
+
+    .config-toggle {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px;
+      font-size: 0.85rem;
+      background: var(--bg-medium);
+      color: var(--text-accent);
+      border: 1px solid var(--bg-border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      letter-spacing: 0.05em;
+    }
+
+    .config-toggle:hover {
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
+
+    .config-toggle .toggle-arrow {
+      font-size: 0.75rem;
+    }
+
+    .config-toggle.collapsed .toggle-arrow {
+      transform: rotate(-90deg);
+    }
+
+    #config-content.hidden {
+      display: none;
+    }
+
+    #config {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    /* ---- schedule rows ---- */
+    .schedule-row {
+      border: 1px solid var(--bg-border);
+      padding: 0.4rem;
+      margin-bottom: 0.3rem;
       display: flex;
       flex-wrap: wrap;
       gap: 0.4rem;
@@ -157,15 +278,15 @@
       display: flex;
       flex-direction: column;
       font-size: 0.8rem;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--text-muted);
     }
 
     .schedule-row input,
     .schedule-row select {
       margin-top: 2px;
-      padding: 3px 6px;
-      font-size: 1rem;
+      padding: 3px 5px;
+      font-size: 0.9rem;
     }
 
     .remove-btn {
@@ -179,85 +300,308 @@
     }
 
     .remove-btn:hover {
-      color: #e08080;
-    }
-
-    @media (max-width: 600px) {
-      .schedule-header {
-        margin: 0.5rem 0 0.25rem;
-      }
-
-      .schedule-row {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .schedule-row label {
-        width: 100%;
-      }
-
-      .schedule-row input,
-      .schedule-row select {
-        width: 100%;
-      }
-
-      .remove-btn {
-        margin-left: 0;
-        align-self: end;
-      }
-    }
-
-    .status {
-      color: var(--text-muted);
-      font-size: 1rem;
-      margin: 0.5rem 0;
-    }
-
-    .status.error {
       color: var(--text-error);
-      background: var(--bg-error);
-      padding: 0.5rem;
-      border-radius: 4px;
+      background: var(--bg-hover);
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 1rem;
-      margin: 0.5rem 0;
-    }
-
-    th,
-    td {
+    /* ---- fish list (inline, main content) ---- */
+    .fish-list-section {
       border: 1px solid var(--bg-border);
-      padding: 6px 10px;
-      text-align: left;
     }
 
-    th {
+    .fish-list-section .fish-list-header {
+      display: flex;
+      align-items: center;
+      padding: 0.4rem 0.75rem;
       background: var(--bg-medium);
-      font-weight: 600;
-      color: var(--text-muted);
-      font-size: 1rem;
+      border-bottom: 1px solid var(--bg-border);
     }
 
-    td {
+    .fish-list-section .fish-list-header h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-heading);
+      flex: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .fish-list-section .fish-list-search {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 0.4rem 0.75rem;
+      position: relative;
+      border-bottom: 1px solid var(--bg-border);
+      background: var(--bg-medium);
+    }
+
+    .fish-list-section .fish-list-search input {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 0.9rem;
+    }
+
+    .filter-help-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 2px;
+      flex-shrink: 0;
+    }
+
+    .filter-help-btn:hover {
       color: var(--text-primary);
     }
 
-    .download-btn {
-      margin-top: 0.25rem;
+    .filter-help-box {
+      display: none;
+      width: 100%;
+      background: var(--bg-medium);
+      border: 1px solid var(--bg-border);
+      padding: 0.6rem;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      line-height: 1.6;
+      margin-top: 2px;
+      box-sizing: border-box;
     }
 
-    .submit-row {
-      margin-top: 0.75rem;
+    .filter-help-box.visible {
+      display: block;
     }
 
-    .btn-primary {
-      background: var(--bg-primary);
-      color: var(--text-white);
-      font-weight: 600;
-      padding: 6px 20px;
+    .fish-list-section .fish-list-stats {
+      padding: 0.2rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--bg-border);
+      background: var(--bg-medium);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .fish-list-section .fish-list-stats>label {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.8rem;
+      font-weight: 400;
+      cursor: pointer;
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .fish-list-section .fish-scroll {
+      max-height: 55vh;
+      overflow-y: auto;
+    }
+
+    .fish-item {
+      display: flex;
+      align-items: start;
+      gap: 0.5rem;
+      cursor: default;
+      font-size: 0.9rem;
+    }
+
+    .fish-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .fish-item.caught .fish-name {
+      color: var(--bg-primary);
+    }
+
+    .fish-item input[type="checkbox"] {
+      accent-color: var(--bg-primary);
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+
+    .fish-item .fish-body {
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+    }
+
+    .fish-item .fish-name {
+      color: var(--text-accent);
+      font-weight: 700;
+      display: block;
+    }
+
+    .fish-item .fish-next-window {
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: var(--text-primary);
+      margin-left: 0.4rem;
+      white-space: nowrap;
+    }
+
+    .fish-item .fish-next-window.past {
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+
+    .fish-item .fish-next-window.ongoing {
+      color: var(--text-accent);
+    }
+
+    .fish-item .fish-meta {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      display: block;
+    }
+
+    .fish-item .fav-star {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0 2px;
+      color: var(--text-muted);
+    }
+
+    .fish-item .fav-star.faved {
+      color: var(--text-accent);
+    }
+
+    .fish-item .fav-star:hover {
+      color: var(--text-accent);
+    }
+
+    .fish-list-section .fish-item {
+      padding: 0.3rem 0.75rem;
+      border-bottom: 1px solid var(--bg-border);
+    }
+
+    .fish-list-section .fish-item .fish-body {
+      cursor: pointer;
+    }
+
+    #fish-list-search-clear {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 0.9rem;
+      color: var(--text-error);
+    }
+
+    .fish-list-section .fish-empty {
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 0.9rem;
+    }
+
+    /* ---- results side panel ---- */
+    .results-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      display: none;
+    }
+
+    .results-overlay.open {
+      display: block;
+    }
+
+    .results-panel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 800px;
+      max-width: calc(100vw - 2rem);
+      max-height: calc(100vh - 4rem);
+      background: var(--bg-dark);
+      border: 1px solid var(--bg-border);
+      z-index: 201;
+      display: none;
+      flex-direction: column;
+    }
+
+    .results-panel.open {
+      display: flex;
+    }
+
+    .results-panel .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--bg-border);
+      background: var(--bg-medium);
+    }
+
+    .results-panel .panel-header h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-heading);
+      flex: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .results-panel .panel-header .fish-name-header {
+      color: var(--text-accent);
+    }
+
+    .results-panel .panel-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .results-panel .panel-close:hover {
+      color: var(--text-heading);
+    }
+
+    .results-panel .panel-status {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--bg-border);
+    }
+
+    .results-panel .panel-status .status {
+      margin: 0;
+    }
+
+    .fish-info-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem 1.2rem;
+      padding: 0.4rem 0;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      border-top: 1px solid var(--bg-border);
+      margin-top: 0.4rem;
+    }
+
+    .results-panel .results-scroll {
+      flex: 1;
+      overflow: auto;
+      padding: 0 0.75rem 0.75rem;
+    }
+
+    .results-panel .results-scroll table {
+      margin: 0.5rem 0;
+    }
+
+    .results-panel .panel-footer {
+      padding: 0.5rem 0.75rem;
+      border-top: 1px solid var(--bg-border);
     }
 
     .dl-single {
@@ -268,6 +612,7 @@
       display: inline-flex;
       gap: 4px;
       color: var(--text-muted);
+      font-size: 0.9rem;
     }
 
     .dl-single:hover {
@@ -282,7 +627,7 @@
       display: inline-flex;
       gap: 4px;
       color: var(--text-accent);
-      font-size: 1rem;
+      font-size: 0.9rem;
     }
 
     .save-window-btn:hover {
@@ -290,247 +635,17 @@
     }
 
     .save-window-btn.saved {
-      color: #6abf6a;
+      color: #3fb950;
     }
 
-    .saved-windows-section {
-      margin-top: 1rem;
+    .results-panel .results-scroll tr.saved-window td {
+      background: rgba(74, 170, 154, 0.08);
     }
 
-    .saved-windows-header,
-    .schedule-header,
-    .fav-fish-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-      cursor: pointer;
-    }
-
-    .schedule-toggle,
-    .saved-windows-toggle,
-    .fav-fish-toggle {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-
-    .schedule-toggle:hover,
-    .saved-windows-toggle:hover,
-    .fav-fish-toggle:hover {
-      color: var(--text-heading);
-    }
-
-    .schedule-toggle .toggle-arrow,
-    .saved-windows-toggle .toggle-arrow,
-    .fav-fish-toggle .toggle-arrow {
-      font-size: 0.75rem;
-    }
-
-    .schedule-toggle.collapsed .toggle-arrow,
-    .saved-windows-toggle.collapsed .toggle-arrow,
-    .fav-fish-toggle.collapsed .toggle-arrow {
-      transform: rotate(-90deg);
-    }
-
-    #saved-windows-content {
-      display: block;
-    }
-
-    #saved-windows-content.hidden {
-      display: none;
-    }
-
-    .saved-window-item {
-      background: var(--bg-dark);
-      border: 1px solid var(--bg-border);
-      border-radius: 4px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.4rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-      font-size: 0.9rem;
-    }
-
-    .saved-window-item .fish-name {
-      color: var(--text-accent);
-      font-weight: 600;
-      min-width: 120px;
-    }
-
-    .saved-window-item .window-time {
-      color: var(--text-primary);
-    }
-
-    .saved-window-item .remove-saved {
-      margin-left: auto;
-      background: none;
-      border: none;
-      color: var(--text-error);
-      cursor: pointer;
-      padding: 2px 6px;
-      font-size: 0.9rem;
-    }
-
-    .saved-window-item .remove-saved:hover {
-      color: #e08080;
-    }
-
-    .group-box {
-      background: var(--bg-medium);
-      border: 1px solid var(--bg-border);
-      border-radius: 6px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .group-box .group-content {
-      margin-top: 0.3rem;
-    }
-
-    #saved-windows-empty {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      font-style: italic;
-    }
-
-    .fav-fish-section {
-      margin-bottom: 0.5rem;
-    }
-
-    .fav-fish-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .fav-fish-toggle {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-weight: 600;
-      cursor: pointer;
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-    }
-
-    .fav-fish-toggle:hover {
-      color: var(--text-heading);
-    }
-
-    .fav-fish-toggle .toggle-arrow {
-      font-size: 0.6rem;
-    }
-
-    .fav-fish-toggle.collapsed .toggle-arrow {
-      transform: rotate(-90deg);
-    }
-
-    #fav-fish-content {
-      margin-top: 0.3rem;
-    }
-
-    #fav-fish-content.hidden {
-      display: none;
-    }
-
-    #fav-fish-list {
-      margin: 0.5rem 0;
-    }
-
-    .fav-fish-item {
-      background: var(--bg-dark);
-      border: 1px solid var(--bg-border);
-      border-radius: 4px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.4rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
-      font-size: 0.9rem;
-    }
-
-    .fav-fish-item .fav-name {
-      color: var(--text-accent);
-      font-weight: 600;
-      min-width: 120px;
-    }
-
-    .fav-fish-item .fav-search-btn {
-      background: var(--bg-primary);
-      color: var(--text-white);
-      border: none;
-      border-radius: 3px;
-      padding: 3px 10px;
-      font-size: 0.85rem;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    .fav-fish-item .fav-search-btn:hover {
-      filter: brightness(1.2);
-    }
-
-    .fav-fish-item .fav-remove-btn {
-      margin-left: auto;
-      background: none;
-      border: none;
-      color: var(--text-error);
-      cursor: pointer;
-      padding: 2px 6px;
-      font-size: 0.9rem;
-    }
-
-    .fav-fish-item .fav-remove-btn:hover {
-      color: #e08080;
-    }
-
-    #fav-fish-empty {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      font-style: italic;
-    }
-
-    .fav-toggle-btn {
-      background: var(--bg-hover);
-      border: 1px solid var(--bg-border);
-      border-radius: 4px;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 6px 16px;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-
-    .fav-toggle-btn:hover:not(:disabled) {
-      background: var(--bg-border);
-      color: var(--text-accent);
-    }
-
-    .fav-toggle-btn:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-
-    .fav-toggle-btn.faved {
-      color: #c9a86c;
-    }
-
-    .fav-toggle-btn.faved:hover:not(:disabled) {
-      color: #c9a86c;
-      background: var(--bg-border);
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     footer a {
@@ -539,38 +654,82 @@
 
     footer {
       text-align: center;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
-      margin-top: 2rem;
-      padding: 1rem 0;
+      margin-top: 1.5rem;
+      padding: 0.75rem 0;
       border-top: 1px solid var(--bg-border);
     }
 
-    #schedule-content.hidden {
-      display: none;
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    :where(button, input, select):focus-visible {
+      outline: 1px solid var(--text-accent);
+      outline-offset: 2px;
     }
 
     @media (max-width: 600px) {
-      .search-wrap input {
+      .results-panel {
+        width: calc(100vw - 2rem);
+        max-height: calc(100vh - 2rem);
+      }
+
+      .saved-item {
+        flex-wrap: wrap;
+      }
+
+      .saved-item .saved-body {
         width: 100%;
+      }
+
+      .saved-item .fish-name {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .saved-item .window-detail {
+        white-space: normal;
+      }
+
+      .saved-item .window-when {
+        flex-shrink: 0;
+      }
+
+      th:nth-child(5),
+      td:nth-child(5) {
+        display: none;
+      }
+
+      th,
+      td {
+        padding: 3px 5px;
+        font-size: 0.8rem;
       }
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
+  <main class="container">
     <h1>FFXIV Fishing - Schedule Tool</h1>
-    <div id="fish-info" class="fish-info"></div>
 
+    <!-- saved windows (collapsible) -->
     <div class="saved-windows-section group-box">
-      <div class="saved-windows-header" id="saved-windows-header">
-        <button type="button" class="saved-windows-toggle collapsed" tabindex="-1">
-          <span class="toggle-arrow">&#9660;</span>
-          <span id="saved-windows-label">Saved Windows</span>
-        </button>
-      </div>
-      <div id="saved-windows-content" class="hidden group-content">
+      <button type="button" class="config-toggle" id="saved-toggle" aria-expanded="true" aria-controls="saved-content">
+        <span class="toggle-arrow">&#9660;</span>
+        <span>Saved Windows <span id="saved-count"></span></span>
+      </button>
+      <div id="saved-content">
         <div id="saved-windows-list"></div>
         <div id="saved-windows-empty">No windows saved yet.</div>
         <button id="download-saved-ics" type="button" class="download-btn" style="display: none">
@@ -579,76 +738,116 @@
       </div>
     </div>
 
-    <form id="config">
-      <div class="top-row">
-        <label>Fish
-          <div class="search-wrap">
-            <input type="text" id="fish-search" placeholder="Type fish name..." autocomplete="off" />
-            <div class="search-results" id="fish-results"></div>
+    <!-- configuration (collapsible) -->
+    <div class="config-section">
+      <button type="button" class="config-toggle collapsed" id="config-toggle" aria-expanded="false"
+        aria-controls="config-content">
+        <span class="toggle-arrow">&#9660;</span>
+        <span>Configuration</span>
+      </button>
+      <div id="config-content" class="hidden">
+        <form id="config">
+          <label for="search-days">Search window in days</label>
+          <input type="number" id="search-days" name="days" min="1" />
+          <label for="window-limit">Max windows returned</label>
+          <input type="number" id="window-limit" name="limit" min="1" value="100" />
+
+          <div class="group-box" style="margin-top: 0.5rem">
+            <div id="schedule-rows"></div>
+            <button type="button" id="add-schedule">+ Add schedule</button>
           </div>
-        </label>
-        <label>Search window in days
-          <input type="number" name="days" min="1" />
-        </label>
-      </div>
-      <div class="selected-fish" id="selected-fish"></div>
 
-      <div class="fav-fish-section group-box">
-        <div class="fav-fish-header" id="fav-fish-header">
-          <button type="button" class="fav-fish-toggle collapsed" tabindex="-1">
-            <span class="toggle-arrow">&#9660;</span>
-            <span id="fav-fish-label">Favourite Fish</span>
+          <button type="button" id="apply-btn" class="btn-primary" style="margin-top: 0.5rem">
+            Apply
           </button>
-        </div>
-        <div id="fav-fish-content" class="hidden group-content">
-          <div id="fav-fish-list"></div>
-          <div id="fav-fish-empty">No favourites yet.</div>
+        </form>
+      </div>
+    </div>
+
+    <!-- fish list (inline, main content) -->
+    <div class="fish-list-section" id="fish-list-section">
+      <div class="fish-list-header">
+        <h2>Fish List</h2>
+      </div>
+      <div class="fish-list-search">
+        <label class="visually-hidden" for="fish-list-search">Search fish</label>
+        <input type="text" id="fish-list-search" placeholder="Fish name..." autocomplete="off" />
+        <button type="button" id="fish-list-search-clear" aria-label="Clear fish search" title="Clear fish search">
+          &times;
+        </button>
+        <button type="button" id="filter-help" class="filter-help-btn" aria-label="Show filter syntax"
+          aria-expanded="false" aria-controls="filter-help-box">
+          (?)
+        </button>
+        <div id="filter-help-box" class="filter-help-box" role="note">
+          <strong>Filter syntax</strong><br />
+          <code>zone:Mist</code> — by region or location<br />
+          <code>patch:6.0 / patch:.55</code> — by patch<br />
+          <code>uptime&gt;5%</code> — fish uptime above 5%<br />
+          <code>uptime&lt;0.1%</code> — fish uptime below 0.1%<br />
+          <code>zone:Mist && uptime&gt;1%</code> — combine with
+          <code>&&</code>
         </div>
       </div>
-
-      <div class="group-box">
-        <div class="schedule-header" id="schedule-header">
-          <button type="button" class="schedule-toggle collapsed" tabindex="-1">
-            <span class="toggle-arrow">&#9660;</span>
-            <span id="schedule-label">Schedule entries</span>
-          </button>
-        </div>
-        <div id="schedule-content" class="hidden group-content">
-          <div id="schedule-rows"></div>
-          <button type="button" id="add-schedule">+ Add schedule</button>
-        </div>
+      <div class="fish-list-stats" id="fish-list-stats">
+        <label>
+          <input type="checkbox" id="hide-caught" /> Uncaught only
+        </label>
+        <span id="fish-list-stats-text"></span>
       </div>
+      <div class="fish-scroll" id="fish-list-scroll"></div>
+    </div>
 
-      <div class="submit-row">
-        <button type="submit" class="btn-primary">Search</button>
-        <button type="button" id="fav-toggle-btn" class="fav-toggle-btn" disabled title="Select a fish first">
-          &#9734;
+    <!-- results side panel -->
+    <div class="results-overlay" id="results-overlay" aria-hidden="true"></div>
+    <div class="results-panel" id="results-panel" role="dialog" aria-modal="true" aria-labelledby="results-title"
+      tabindex="-1" aria-hidden="true">
+      <div class="panel-header">
+        <h2 id="results-title">
+          Results:
+          <span class="fish-name-header" id="results-fish-name"></span>
+        </h2>
+        <button type="button" class="panel-close" id="results-close" aria-label="Close results">
+          &times;
         </button>
       </div>
-    </form>
-
-    <div id="status" class="status">Loading...</div>
-    <table id="results" style="display: none">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Day</th>
-          <th>Window (Local Time)</th>
-          <th>Window in ET</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-    <button id="download-ics" type="button" class="download-btn" style="display: none">
-      Download all as .ics
-    </button>
+      <div class="panel-status" id="panel-status">
+        <div id="status" class="status" role="status" aria-live="polite">
+          Select a fish to start.
+        </div>
+        <div id="fish-info-bar" class="fish-info-bar" style="display: none"></div>
+      </div>
+      <div class="results-scroll" id="results-scroll">
+        <table id="results" style="display: none">
+          <caption class="visually-hidden">
+            Fishing windows for the selected fish
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">When</th>
+              <th scope="col">Day</th>
+              <th scope="col">Window (Local Time)</th>
+              <th scope="col">Window in ET</th>
+              <th scope="col" aria-label="Actions"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="panel-footer">
+        <button id="download-ics" type="button" class="download-btn" style="display: none">
+          Download all as .ics
+        </button>
+      </div>
+    </div>
 
     <script type="module">
       import init, {
         init_default,
-        search_fish,
         get_fish,
+        list_all_fish_info,
+        get_fish_next_window,
         get_fish_windows_in_schedule,
         unix_to_eorzea_esec,
         unix_from_eorzea_time,
@@ -656,18 +855,34 @@
 
       const DAY_OPTIONS = [
         {value: "", label: "Any"},
-        {value: "0", label: "Mon"},
-        {value: "1", label: "Tue"},
-        {value: "2", label: "Wed"},
-        {value: "3", label: "Thu"},
-        {value: "4", label: "Fri"},
-        {value: "5", label: "Sat"},
-        {value: "6", label: "Sun"},
+        {value: "1", label: "Mon"},
+        {value: "2", label: "Tue"},
+        {value: "3", label: "Wed"},
+        {value: "4", label: "Thu"},
+        {value: "5", label: "Fri"},
+        {value: "6", label: "Sat"},
+        {value: "0", label: "Sun"},
       ];
+
+      let _savedOpen = true;
 
       let _lastWindows = [];
       let _lastFishName = "";
       let _selectedFishId = 0;
+      let _queryGeneration = 0;
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => {
+          const entities = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          };
+          return entities[char];
+        });
+      }
 
       function daySelectHtml(selected) {
         return DAY_OPTIONS.map(
@@ -677,12 +892,15 @@
       }
 
       function timeToSecs(str) {
-        str = str.trim();
+        str = String(str).trim();
         let match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
         if (!match) return NaN;
         let h = parseInt(match[1], 10);
         const m = parseInt(match[2], 10);
         const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (m > 59) return NaN;
+        if (ampm && (h < 1 || h > 12)) return NaN;
+        if (!ampm && (h > 24 || (h === 24 && m !== 0))) return NaN;
         if (ampm === "PM" && h !== 12) h += 12;
         if (ampm === "AM" && h === 12) h = 0;
         return h * 3600 + m * 60;
@@ -692,6 +910,45 @@
         const h = Math.floor(secs / 3600);
         const m = Math.floor((secs % 3600) / 60);
         return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+      }
+
+      function fmtWhen(diffSec, endDiffSec) {
+        if (endDiffSec !== undefined && endDiffSec <= 0)
+          return {whenStr: "ended", state: "past"};
+        if (diffSec <= 0) return {whenStr: "now", state: "ongoing"};
+        let whenStr;
+        if (diffSec < 60) whenStr = "<1m";
+        else if (diffSec < 3600) whenStr = `${Math.floor(diffSec / 60)}m`;
+        else if (diffSec < 86400) whenStr = `${Math.floor(diffSec / 3600)}h`;
+        else whenStr = `${Math.floor(diffSec / 86400)}d`;
+        return {whenStr, state: "future"};
+      }
+
+      let _nextWindowCacheMinute = -1;
+      const _nextWindowCache = new Map();
+
+      function getNextFishWindow(id, nowUnix, nowEorzea) {
+        const minute = Math.floor(nowUnix / 60);
+        if (minute !== _nextWindowCacheMinute) {
+          _nextWindowCacheMinute = minute;
+          _nextWindowCache.clear();
+        }
+        if (_nextWindowCache.has(id)) return _nextWindowCache.get(id);
+        try {
+          const nextJson = get_fish_next_window(id, nowEorzea);
+          const next = JSON.parse(nextJson);
+          _nextWindowCache.set(id, next);
+          return next;
+        } catch {
+          _nextWindowCache.set(id, null);
+          return null;
+        }
+      }
+
+      function eoTime(s) {
+        const parts = String(s).trim().split(/\s+/);
+        if (parts.length < 2) return String(s);
+        return parts[1].split(":").slice(0, 2).join(":");
       }
 
       const STORAGE_KEY = "lastSearch";
@@ -707,11 +964,27 @@
           const raw = localStorage.getItem(STORAGE_KEY);
           if (!raw) return null;
           const p = JSON.parse(raw);
+          const validSchedule = (entry) =>
+            entry &&
+            Number.isFinite(entry.startSec) &&
+            Number.isFinite(entry.endSec) &&
+            entry.startSec >= 0 &&
+            entry.startSec <= 86400 &&
+            entry.endSec >= 0 &&
+            entry.endSec <= 86400 &&
+            (entry.dayOfWeek === undefined ||
+              (Number.isInteger(entry.dayOfWeek) &&
+                entry.dayOfWeek >= 0 &&
+                entry.dayOfWeek <= 6));
           if (
             p &&
             typeof p.fishId === "number" &&
             Array.isArray(p.schedule) &&
-            typeof p.days === "number"
+            p.schedule.every(validSchedule) &&
+            typeof p.days === "number" &&
+            Number.isFinite(p.days) &&
+            (p.limit === undefined ||
+              (typeof p.limit === "number" && Number.isFinite(p.limit)))
           ) {
             return p;
           }
@@ -728,15 +1001,8 @@
           fishId: 0,
           schedule: [{startSec: 0, endSec: 86400}],
           days: 30,
+          limit: 100,
         };
-      }
-
-      function updateScheduleCount() {
-        const count = document.querySelectorAll(
-          "#schedule-rows .schedule-row",
-        ).length;
-        document.getElementById("schedule-label").textContent =
-          "Schedule entries (" + count + ")";
       }
 
       function createScheduleRow(entry) {
@@ -747,30 +1013,33 @@
           <select>${daySelectHtml(entry.dayOfWeek !== undefined ? String(entry.dayOfWeek) : "")}</select>
         </label>
         <label>Start
-          <input type="text" value="${secsToTime(entry.startSec)}" />
+          <input type="text" value="${escapeHtml(secsToTime(entry.startSec))}" />
         </label>
         <label>End
-          <input type="text" value="${secsToTime(entry.endSec)}" />
+          <input type="text" value="${escapeHtml(secsToTime(entry.endSec))}" />
         </label>
-        <button type="button" class="remove-btn" title="Remove">&#10005;</button>
+        <button type="button" class="remove-btn" title="Remove" aria-label="Remove schedule">&#10005;</button>
       `;
         div.querySelector(".remove-btn").addEventListener("click", () => {
           div.remove();
-          updateScheduleCount();
         });
         return div;
       }
 
       function populateForm(formData) {
         const form = document.getElementById("config");
-        form.days.value = formData.days;
+        form.days.value = Number.isFinite(formData.days)
+          ? Math.max(1, Math.min(formData.days, 7300))
+          : 30;
+        form.limit.value = Number.isFinite(formData.limit)
+          ? Math.max(1, Math.min(formData.limit, 10000))
+          : 100;
         _selectedFishId = formData.fishId;
         const container = document.getElementById("schedule-rows");
         container.innerHTML = "";
         for (const entry of formData.schedule) {
           container.appendChild(createScheduleRow(entry));
         }
-        updateScheduleCount();
       }
 
       function readSchedule() {
@@ -796,86 +1065,154 @@
 
       function readForm() {
         const form = document.getElementById("config");
+        const parsedDays = parseInt(form.days.value, 10);
+        const parsedLimit = parseInt(form.limit.value, 10);
+        const days = Number.isFinite(parsedDays)
+          ? Math.max(1, Math.min(parsedDays, 7300))
+          : 7;
+        const limit = Number.isFinite(parsedLimit)
+          ? Math.max(1, Math.min(parsedLimit, 10000))
+          : 100;
         return {
           fishId: _selectedFishId || 0,
           schedule: readSchedule(),
-          days: parseInt(form.days.value, 10) || 7,
+          days,
+          limit,
         };
       }
 
-      async function query(formData) {
-        const elStatus = document.getElementById("status");
-        const elTbody = document.getElementById("tbody");
-        const elTable = document.getElementById("results");
-
-        elTbody.innerHTML = "";
-        elTable.style.display = "none";
-
-        const nowUnix = Math.floor(Date.now() / 1000);
-        const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
-        const timeperiodSecs = BigInt(formData.days * 86400);
-        const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-        elStatus.textContent = `Querying windows over the next ${formData.days} day(s)...`;
-
-        const fishInfo = JSON.parse(await get_fish(formData.fishId));
-        _lastFishName = fishInfo.name;
-        document.getElementById("fish-info").textContent =
-          `Fish #${formData.fishId} — ${fishInfo.name}`;
-
-        const windowsJson = await get_fish_windows_in_schedule(
-          formData.fishId,
-          nowEorzea,
-          JSON.stringify(formData.schedule),
-          timeperiodSecs,
-          timezoneName,
-        );
-        const windows = JSON.parse(windowsJson);
-        _lastWindows = windows;
-
-        elStatus.textContent = `Found ${windows.length} window(s) in the next ${formData.days} day(s).`;
-        elTable.style.display = "";
-        const dlBtn = document.getElementById("download-ics");
-        dlBtn.style.display = windows.length > 0 ? "" : "none";
-
-        if (windows.length === 0) {
-          const row = document.createElement("tr");
-          row.innerHTML =
-            '<td colspan="5">No windows found within the schedule.</td>';
-          elTbody.appendChild(row);
-          return;
-        }
-
-        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-        const fmtDate = (d) => d.toLocaleDateString();
-        const fmtTime = (d) => d.toLocaleTimeString();
-        const eoTime = (s) =>
-          s.split(" ")[1].split(":").slice(0, 2).join(":");
-
-        for (let i = 0; i < windows.length; i++) {
-          const w = windows[i];
-          const startUnix = Number(
-            unix_from_eorzea_time(BigInt(w.startEsec)),
+      function withTimeout(promise, milliseconds) {
+        let timeoutId;
+        const timeout = new Promise((_, reject) => {
+          timeoutId = setTimeout(
+            () =>
+              reject(
+                new Error(`Search timed out after ${milliseconds / 1000}s`),
+              ),
+            milliseconds,
           );
-          const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
-          const startD = new Date(startUnix * 1000);
-          const endD = new Date(endUnix * 1000);
-          const startDay = days[startD.getDay()];
-          const row = document.createElement("tr");
-          row.innerHTML = `
-        <td>${i + 1}</td>
-        <td>${startDay} ${fmtDate(startD)}</td>
-        <td>${fmtTime(startD)} - ${fmtTime(endD)}</td>
-        <td>${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}</td>
+        });
+        return Promise.race([promise, timeout]).finally(() => {
+          clearTimeout(timeoutId);
+        });
+      }
+
+      async function query(formData, trigger) {
+        const queryGeneration = ++_queryGeneration;
+        try {
+          const elStatus = document.getElementById("status");
+          const elTbody = document.getElementById("tbody");
+          const elTable = document.getElementById("results");
+
+          elTbody.innerHTML = "";
+          elTable.style.display = "none";
+
+          const nowUnix = Math.floor(Date.now() / 1000);
+          const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
+          const timeperiodSecs = BigInt(formData.days * 86400);
+          const timezoneName =
+            Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+          elStatus.textContent = `Searching the next ${formData.days} day(s) for windows...`;
+          // yield so the status message paints before the blocking wasm call
+          await new Promise((r) => setTimeout(r, 0));
+          if (queryGeneration !== _queryGeneration) return;
+
+          const fishInfo = JSON.parse(await get_fish(formData.fishId));
+          if (queryGeneration !== _queryGeneration) return;
+          _lastFishName = fishInfo.name;
+          document.getElementById("results-fish-name").textContent =
+            fishInfo.name;
+
+          // show fish info
+          const infoBar = document.getElementById("fish-info-bar");
+          infoBar.style.display = "flex";
+          infoBar.innerHTML = "";
+          const caught = getList(CAUGHT_KEY);
+          const favs = getList(FAV_KEY);
+          infoBar.appendChild(
+            createFishCard(fishInfo, {
+              caught: caught.includes(fishInfo.id),
+              faved: favs.includes(fishInfo.id),
+              inline: true,
+            }),
+          );
+
+          const windowsJson = await withTimeout(
+            get_fish_windows_in_schedule(
+              formData.fishId,
+              nowEorzea,
+              JSON.stringify(formData.schedule),
+              timeperiodSecs,
+              timezoneName,
+            ),
+            10000,
+          );
+          if (queryGeneration !== _queryGeneration) return;
+          const windows = JSON.parse(windowsJson);
+          const limit = formData.limit || 100;
+          if (windows.length > limit) windows.length = limit;
+          _lastWindows = windows;
+
+          elStatus.textContent = `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""} in the next ${formData.days} day(s).`;
+          elTable.style.display = "";
+          const dlBtn = document.getElementById("download-ics");
+          dlBtn.style.display = windows.length > 0 ? "" : "none";
+
+          if (windows.length === 0) {
+            const row = document.createElement("tr");
+            row.innerHTML =
+              '<td colspan="6">No windows found within the schedule.</td>';
+            elTbody.appendChild(row);
+            openResults(trigger);
+            return;
+          }
+
+          const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          const fmtDate = (d) => d.toLocaleDateString();
+          const fmtTime = (d) => d.toLocaleTimeString();
+
+          let savedCount = 0;
+          for (let i = 0; i < windows.length; i++) {
+            const w = windows[i];
+            const startUnix = Number(
+              unix_from_eorzea_time(BigInt(w.startEsec)),
+            );
+            const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+            const startD = new Date(startUnix * 1000);
+            const endD = new Date(endUnix * 1000);
+            const startDay = days[startD.getDay()];
+            const {whenStr} = fmtWhen(startUnix - nowUnix);
+            const row = document.createElement("tr");
+            const wMeta = {
+              ...w,
+              fishId: _selectedFishId,
+              fishName: _lastFishName,
+            };
+            const wSaved = isWindowSaved(wMeta);
+            if (wSaved) savedCount++;
+            row.innerHTML = `
+        <td>${escapeHtml(i + 1)}</td>
+        <td>${escapeHtml(whenStr)}</td>
+        <td>${escapeHtml(startDay)} ${escapeHtml(fmtDate(startD))}</td>
+        <td>${escapeHtml(fmtTime(startD))} - ${escapeHtml(fmtTime(endD))}</td>
+        <td>${escapeHtml(eoTime(w.startDisplay))} - ${escapeHtml(eoTime(w.endDisplay))}</td>
         <td>
-          <button type="button" class="save-window-btn" data-idx="${i}" title="Save window">&#128204;</button>
-          <button type="button" class="dl-single" data-idx="${i}">&#128197;&#11015;</button>
+          <button type="button" class="save-window-btn${wSaved ? " saved" : ""}" data-idx="${i}" title="${wSaved ? "Remove saved window" : "Save window"}" aria-label="${wSaved ? "Remove saved window" : "Save window"}">${wSaved ? "&#128278;" : "&#128204;"}</button>
+          <button type="button" class="dl-single" data-idx="${i}" aria-label="Download window as calendar file">&#128197;&#11015;</button>
         </td>
       `;
-          elTbody.appendChild(row);
-        }
+            elTbody.appendChild(row);
+          }
 
-        updateSaveButtons();
+          elStatus.textContent =
+            `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""} in the next ${formData.days} day(s).` +
+            (savedCount ? ` ${savedCount} saved.` : "");
+          updateSaveButtons();
+          openResults(trigger);
+        } catch (err) {
+          if (queryGeneration === _queryGeneration) throw err;
+        }
       }
 
       function fmtIcsDate(unixSecs) {
@@ -886,17 +1223,28 @@
       function icsVevent(w, fishName) {
         const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
         const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+        const uid = `${windowKey(w)}@ffxivfishing`;
         return [
           "BEGIN:VEVENT",
+          "UID:" + uid,
+          "DTSTAMP:" + fmtIcsDate(Math.floor(Date.now() / 1000)),
           "DTSTART:" + fmtIcsDate(startUnix),
           "DTEND:" + fmtIcsDate(endUnix),
-          "SUMMARY:" + (fishName || "Fish") + " Window",
+          "SUMMARY:" + escapeIcsText((fishName || "Fish") + " Window"),
           "END:VEVENT",
         ];
       }
 
+      function escapeIcsText(value) {
+        return String(value)
+          .replace(/\\/g, "\\\\")
+          .replace(/;/g, "\\;")
+          .replace(/,/g, "\\,")
+          .replace(/\r?\n/g, "\\n");
+      }
+
       function downloadIcsFile(lines, filename) {
-        const blob = new Blob([lines.join("\r\n")], {
+        const blob = new Blob([lines.join("\r\n") + "\r\n"], {
           type: "text/calendar;charset=utf-8",
         });
         const url = URL.createObjectURL(blob);
@@ -944,11 +1292,9 @@
 
       // ---- Saved Windows ----
 
-      const SAVED_WINDOWS_KEY = "savedWindows";
-
-      function getSavedWindows() {
+      function getList(key) {
         try {
-          const raw = localStorage.getItem(SAVED_WINDOWS_KEY);
+          const raw = localStorage.getItem(key);
           if (!raw) return [];
           const arr = JSON.parse(raw);
           return Array.isArray(arr) ? arr : [];
@@ -957,14 +1303,43 @@
         }
       }
 
-      function saveWindowsToStorage(windows) {
+      function setList(key, list) {
         try {
-          localStorage.setItem(SAVED_WINDOWS_KEY, JSON.stringify(windows));
+          localStorage.setItem(key, JSON.stringify(list));
         } catch { }
       }
 
+      const SAVED_WINDOWS_KEY = "savedWindows";
+
+      function isSavedWindow(value) {
+        if (!value || typeof value !== "object") return false;
+        if (
+          !Number.isInteger(value.fishId) ||
+          typeof value.fishName !== "string"
+        ) {
+          return false;
+        }
+        if (
+          typeof value.startDisplay !== "string" ||
+          typeof value.endDisplay !== "string"
+        ) {
+          return false;
+        }
+        try {
+          BigInt(value.startEsec);
+          BigInt(value.endEsec);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function getSavedWindows() {
+        return getList(SAVED_WINDOWS_KEY).filter(isSavedWindow);
+      }
+
       function windowKey(w) {
-        return `${w.fishId}-${w.fishName}-${w.startEsec}-${w.endEsec}`;
+        return `${w.fishId}-${w.startEsec}-${w.endEsec}`;
       }
 
       function isWindowSaved(w) {
@@ -978,8 +1353,9 @@
         const key = windowKey(w);
         if (saved.some((s) => windowKey(s) === key)) return;
         saved.push(w);
-        saveWindowsToStorage(saved);
+        setList(SAVED_WINDOWS_KEY, saved);
         renderSavedWindows();
+        startSavedWindowTimer();
         updateSaveButtons();
       }
 
@@ -987,8 +1363,9 @@
         let saved = getSavedWindows();
         const key = windowKey(w);
         saved = saved.filter((s) => windowKey(s) !== key);
-        saveWindowsToStorage(saved);
+        setList(SAVED_WINDOWS_KEY, saved);
         renderSavedWindows();
+        startSavedWindowTimer();
         updateSaveButtons();
       }
 
@@ -1002,6 +1379,13 @@
         );
       }
 
+      function downloadSavedIcsItem(w) {
+        downloadIcsCalendar(
+          [icsVevent(w, w.fishName)],
+          "window-" + kebab(w.fishName) + ".ics",
+        );
+      }
+
       function renderSavedWindows() {
         const saved = getSavedWindows().sort((a, b) => {
           const aSec = BigInt(a.startEsec);
@@ -1012,7 +1396,6 @@
         });
         const container = document.getElementById("saved-windows-list");
         const empty = document.getElementById("saved-windows-empty");
-        const label = document.getElementById("saved-windows-label");
 
         container.innerHTML = "";
 
@@ -1020,16 +1403,17 @@
 
         if (saved.length === 0) {
           empty.style.display = "";
-          label.textContent = "Saved Windows";
+          document.getElementById("saved-count").textContent = "";
           dlBtn.style.display = "none";
           return;
         }
 
         empty.style.display = "none";
-        label.textContent = `Saved Windows (${saved.length})`;
+        document.getElementById("saved-count").textContent =
+          `(${saved.length})`;
         dlBtn.style.display = "";
 
-        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
         for (const w of saved) {
           const startUnix = Number(
@@ -1037,47 +1421,140 @@
           );
           const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
           const startD = new Date(startUnix * 1000);
-          const endD = new Date(endUnix * 1000);
           const startDay = days[startD.getDay()];
           const dateStr = startD.toLocaleDateString();
-          const timeStr = `${startD.toLocaleTimeString()} - ${endD.toLocaleTimeString()}`;
-          const eoStr = `${w.startDisplay.split(" ")[1].split(":").slice(0, 2).join(":")} - ${w.endDisplay.split(" ")[1].split(":").slice(0, 2).join(":")}`;
+          const timeStr = `${startD.toLocaleTimeString()} - ${new Date(endUnix * 1000).toLocaleTimeString()}`;
+          const eoStr = `${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}`;
+
+          const nowUnix = Math.floor(Date.now() / 1000);
+          const {whenStr, state} = fmtWhen(
+            startUnix - nowUnix,
+            endUnix - nowUnix,
+          );
+          const displayWhen = state === "future" ? "in " + whenStr : whenStr;
 
           const div = document.createElement("div");
-          div.className = "saved-window-item";
+          div.className = `saved-item ${state}`;
+          div.dataset.start = startUnix;
+          div.dataset.end = endUnix;
+          div.dataset.fishId = w.fishId;
           div.innerHTML = `
-            <span class="fish-name">${w.fishName}</span>
-            <span class="window-day">${startDay} ${dateStr}</span>
-            <span class="window-time">${timeStr}</span>
-            <span class="window-eo">ET: ${eoStr}</span>
-            <button type="button" class="remove-saved" title="Remove saved window">&#10005;</button>
+            <div class="saved-body">
+              <div class="saved-top-row">
+                <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(w.fishName)}">${escapeHtml(w.fishName)}</span>
+                <span class="window-when">${escapeHtml(displayWhen)}</span>
+                <span class="saved-actions">
+                  <button type="button" class="dl-single" title="Download .ics" aria-label="Download saved window as calendar file">&#128197;&#11015;</button>
+                  <button type="button" class="remove-saved" title="Remove" aria-label="Remove saved window">&#10005;</button>
+                </span>
+              </div>
+              <span class="window-detail">${escapeHtml(startDay)} | ${escapeHtml(dateStr)} ${escapeHtml(timeStr)} | ET ${escapeHtml(eoStr)}</span>
+            </div>
           `;
+          const savedFish = div.querySelector(".fish-name");
+          const selectSavedFish = () => {
+            setSelectedFish(w.fishId);
+            const p = readForm();
+            if (p.schedule.length === 0)
+              p.schedule.push({startSec: 0, endSec: 86400});
+            saveSearch(p);
+            const elStatus = document.getElementById("status");
+            elStatus.className = "status";
+            query(p, savedFish).catch((err) => {
+              elStatus.className = "status error";
+              elStatus.textContent = `Error: ${err}`;
+            });
+          };
+          savedFish.addEventListener("click", selectSavedFish);
+          savedFish.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectSavedFish();
+            }
+          });
           div.querySelector(".remove-saved").addEventListener("click", () => {
             removeSavedWindow(w);
+          });
+          div.querySelector(".dl-single").addEventListener("click", () => {
+            downloadSavedIcsItem(w);
           });
           container.appendChild(div);
         }
       }
 
-      function updateSaveButtons() {
+      let _savedTimerId = null;
+
+      function updateSavedWindowTimers() {
+        const nowUnix = Math.floor(Date.now() / 1000);
+        document
+          .querySelectorAll("#saved-windows-list .saved-item")
+          .forEach((div) => {
+            const startUnix = parseInt(div.dataset.start, 10);
+            const endUnix = parseInt(div.dataset.end, 10);
+            if (isNaN(startUnix)) return;
+            const {whenStr, state} = fmtWhen(
+              startUnix - nowUnix,
+              endUnix - nowUnix,
+            );
+            const displayWhen =
+              state === "future" ? "in " + whenStr : whenStr;
+            div.querySelector(".window-when").textContent = displayWhen;
+            div.className = `saved-item ${state}`;
+          });
+      }
+
+      function startSavedWindowTimer() {
+        if (_savedTimerId) {
+          clearInterval(_savedTimerId);
+          _savedTimerId = null;
+        }
+
         const saved = getSavedWindows();
+        const nowUnix = Math.floor(Date.now() / 1000);
+        let nextStart = Infinity;
+        for (const w of saved) {
+          const startUnix = Number(
+            unix_from_eorzea_time(BigInt(w.startEsec)),
+          );
+          const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+          if (endUnix > nowUnix && startUnix < nextStart) {
+            nextStart = startUnix;
+          }
+        }
+
+        if (nextStart === Infinity) return;
+
+        const diff = nextStart - nowUnix;
+        const interval = diff > 3600 ? 900000 : 60000;
+
+        _savedTimerId = setInterval(() => {
+          updateSavedWindowTimers();
+          clearInterval(_savedTimerId);
+          startSavedWindowTimer();
+        }, interval);
+
+        updateSavedWindowTimers();
+      }
+
+      function updateSaveButtons() {
         document.querySelectorAll(".save-window-btn").forEach((btn) => {
           const idx = parseInt(btn.dataset.idx, 10);
-          const selected = _lastWindows[idx];
-          if (selected) {
-            const selectedWindow = {
-              ...selected,
-              fishId: _selectedFishId,
-              fishName: _lastFishName,
-            };
-            if (isWindowSaved(selectedWindow)) {
-              btn.classList.add("saved");
-              btn.title = "Remove saved window";
-            } else {
-              btn.classList.remove("saved");
-              btn.title = "Save window";
-            }
-          }
+          const w = _lastWindows[idx];
+          if (!w) return;
+          const tr = btn.closest("tr");
+          const savedFlag = isWindowSaved({
+            ...w,
+            fishId: _selectedFishId,
+            fishName: _lastFishName,
+          });
+          btn.classList.toggle("saved", savedFlag);
+          btn.title = savedFlag ? "Remove saved window" : "Save window";
+          btn.setAttribute(
+            "aria-label",
+            savedFlag ? "Remove saved window" : "Save window",
+          );
+          btn.innerHTML = savedFlag ? "&#10060;" : "&#128204;";
+          tr.classList.toggle("saved-window", savedFlag);
         });
       }
 
@@ -1085,127 +1562,93 @@
 
       const FAV_KEY = "favFish";
 
-      function getFavFish() {
-        try {
-          const raw = localStorage.getItem(FAV_KEY);
-          if (!raw) return [];
-          const arr = JSON.parse(raw);
-          return Array.isArray(arr) ? arr : [];
-        } catch {
-          return [];
-        }
-      }
-
-      function saveFavFish(list) {
-        try {
-          localStorage.setItem(FAV_KEY, JSON.stringify(list));
-        } catch { }
-      }
-
-      function isFavFish(id) {
-        return getFavFish().some((f) => f.id === id);
-      }
-
-      function toggleFavFish(id, name) {
-        let list = getFavFish();
-        const idx = list.findIndex((f) => f.id === id);
+      function toggleFavFish(id) {
+        let list = getList(FAV_KEY);
+        const idx = list.indexOf(id);
         if (idx >= 0) {
           list.splice(idx, 1);
         } else {
-          list.push({id, name});
+          list.push(id);
         }
-        saveFavFish(list);
-        renderFavFish();
-        updateFavToggleBtn();
+        setList(FAV_KEY, list);
+        renderFishList();
+        const isFaved = list.includes(id);
+        document.querySelectorAll(".fav-star").forEach((button) => {
+          if (button.dataset.fishId !== String(id)) return;
+          button.classList.toggle("faved", isFaved);
+          button.setAttribute(
+            "aria-label",
+            isFaved ? "Remove fish from favourites" : "Add fish to favourites",
+          );
+          button.innerHTML = isFaved ? "&#9829;" : "&#9825;";
+        });
       }
 
-      function renderFavFish() {
-        const list = getFavFish();
-        const container = document.getElementById("fav-fish-list");
-        const empty = document.getElementById("fav-fish-empty");
-        const label = document.getElementById("fav-fish-label");
-
-        container.innerHTML = "";
-
-        if (list.length === 0) {
-          empty.style.display = "";
-          label.textContent = "Favourite Fish";
-          return;
-        }
-
-        empty.style.display = "none";
-        label.textContent = `Favourite Fish (${list.length})`;
-
-        for (const f of list) {
-          const div = document.createElement("div");
-          div.className = "fav-fish-item";
-          div.innerHTML = `
-            <span class="fav-name">${f.name}</span>
-            <button type="button" class="fav-search-btn" data-id="${f.id}" data-name="${f.name}">Search</button>
-            <button type="button" class="fav-remove-btn" data-id="${f.id}" title="Remove favourite">&#10005;</button>
-          `;
-          div
-            .querySelector(".fav-search-btn")
-            .addEventListener("click", (e) => {
-              e.stopPropagation();
-              const id = parseInt(e.target.dataset.id, 10);
-              const name = e.target.dataset.name;
-              selectAndSearchFav(id, name);
-            });
-          div
-            .querySelector(".fav-remove-btn")
-            .addEventListener("click", (e) => {
-              e.stopPropagation();
-              const id = parseInt(e.target.dataset.id, 10);
-              toggleFavFish(id, "");
-            });
-          container.appendChild(div);
-        }
-      }
-
-      function selectAndSearchFav(id, name) {
-        setSelectedFish(id, name);
-        const form = document.getElementById("config");
-        form.dispatchEvent(new Event("submit", {cancelable: true}));
-      }
-
-      function updateFavToggleBtn() {
-        const btn = document.getElementById("fav-toggle-btn");
-        if (!_selectedFishId) {
-          btn.disabled = true;
-          btn.title = "Select a fish first";
-          btn.innerHTML = "&#9734;";
-          btn.classList.remove("faved");
-          return;
-        }
-        btn.disabled = false;
-        const faved = isFavFish(_selectedFishId);
-        btn.classList.toggle("faved", faved);
-        btn.innerHTML = faved ? "&#9733;" : "&#9734;";
-        btn.title = faved ? "Remove favourite" : "Add favourite";
-      }
-
-      async function lookupFishName(id) {
-        if (!id) return;
-        try {
-          const info = JSON.parse(await get_fish(id));
-          _selectedFishId = id;
-          document.getElementById("fish-search").value = info.name;
-          document.getElementById("selected-fish").textContent = "ID: " + id;
-          updateFavToggleBtn();
-        } catch { }
-      }
-
-      function setSelectedFish(id, name) {
+      function setSelectedFish(id) {
         _selectedFishId = id;
-        document.getElementById("fish-search").value = name;
-        document.getElementById("selected-fish").textContent = "ID: " + id;
-        document.getElementById("fish-results").style.display = "none";
-        updateFavToggleBtn();
       }
+
+      // ---- Results Panel ----
+
+      let _resultsTrigger = null;
+
+      function openResults(trigger) {
+        const panel = document.getElementById("results-panel");
+        const overlay = document.getElementById("results-overlay");
+        if (trigger) _resultsTrigger = trigger;
+        panel.classList.add("open");
+        panel.setAttribute("aria-hidden", "false");
+        overlay.classList.add("open");
+        overlay.setAttribute("aria-hidden", "false");
+        panel.focus();
+      }
+
+      function closeResults() {
+        const panel = document.getElementById("results-panel");
+        const overlay = document.getElementById("results-overlay");
+        panel.classList.remove("open");
+        panel.setAttribute("aria-hidden", "true");
+        overlay.classList.remove("open");
+        overlay.setAttribute("aria-hidden", "true");
+        if (_resultsTrigger && typeof _resultsTrigger.focus === "function") {
+          _resultsTrigger.focus();
+        }
+        _resultsTrigger = null;
+      }
+
+      document
+        .getElementById("results-close")
+        .addEventListener("click", closeResults);
+      document
+        .getElementById("results-overlay")
+        .addEventListener("click", closeResults);
+      document.addEventListener("keydown", (event) => {
+        const panel = document.getElementById("results-panel");
+        if (event.key === "Escape" && panel.classList.contains("open")) {
+          closeResults();
+          return;
+        }
+        if (event.key !== "Tab" || !panel.classList.contains("open")) return;
+        const focusable = panel.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) {
+          event.preventDefault();
+          panel.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
 
       async function main() {
-        document.getElementById("fish-info").textContent = "";
         const formData = getFormData();
         populateForm(formData);
 
@@ -1215,34 +1658,18 @@
           await init();
           await init_default();
           renderSavedWindows();
-          renderFavFish();
-          await lookupFishName(formData.fishId);
-          updateFavToggleBtn();
-          await query(formData);
+          startSavedWindowTimer();
+          // preload fish list data
+          try {
+            const raw = await list_all_fish_info();
+            _allFishInfo = JSON.parse(raw);
+          } catch { }
+          renderFishList();
         } catch (err) {
           elStatus.className = "status error";
           elStatus.textContent = `Error: ${err}`;
         }
       }
-
-      document
-        .getElementById("config")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const p = readForm();
-          if (p.schedule.length === 0) {
-            p.schedule.push({startSec: 0, endSec: 86400});
-          }
-          const elStatus = document.getElementById("status");
-          elStatus.className = "status";
-          try {
-            await query(p);
-            saveSearch(p);
-          } catch (err) {
-            elStatus.className = "status error";
-            elStatus.textContent = `Error: ${err}`;
-          }
-        });
 
       document
         .getElementById("add-schedule")
@@ -1251,16 +1678,25 @@
           container.appendChild(
             createScheduleRow({startSec: 0, endSec: 86400}),
           );
-          updateScheduleCount();
         });
 
+      document.getElementById("apply-btn").addEventListener("click", () => {
+        const p = readForm();
+        if (p.schedule.length === 0) {
+          p.schedule.push({startSec: 0, endSec: 86400});
+        }
+        saveSearch(p);
+      });
+
       document
-        .getElementById("schedule-header")
+        .getElementById("config-toggle")
         .addEventListener("click", function () {
-          const content = document.getElementById("schedule-content");
+          const content = document.getElementById("config-content");
           content.classList.toggle("hidden");
-          this.querySelector(".schedule-toggle").classList.toggle(
-            "collapsed",
+          this.classList.toggle("collapsed");
+          this.setAttribute(
+            "aria-expanded",
+            String(!content.classList.contains("hidden")),
           );
         });
 
@@ -1273,32 +1709,14 @@
         .addEventListener("click", downloadSavedIcs);
 
       document
-        .getElementById("saved-windows-header")
+        .getElementById("saved-toggle")
         .addEventListener("click", function () {
-          const content = document.getElementById("saved-windows-content");
-          content.classList.toggle("hidden");
-          this.querySelector(".saved-windows-toggle").classList.toggle(
-            "collapsed",
-          );
-        });
-
-      document
-        .getElementById("fav-fish-header")
-        .addEventListener("click", function () {
-          const content = document.getElementById("fav-fish-content");
-          content.classList.toggle("hidden");
-          this.querySelector(".fav-fish-toggle").classList.toggle(
-            "collapsed",
-          );
-        });
-
-      document
-        .getElementById("fav-toggle-btn")
-        .addEventListener("click", () => {
-          if (_selectedFishId) {
-            const name = document.getElementById("fish-search").value;
-            toggleFavFish(_selectedFishId, name);
-          }
+          _savedOpen = !_savedOpen;
+          document.getElementById("saved-content").style.display = _savedOpen
+            ? ""
+            : "none";
+          this.classList.toggle("collapsed", !_savedOpen);
+          this.setAttribute("aria-expanded", String(_savedOpen));
         });
 
       document.getElementById("results").addEventListener("click", (e) => {
@@ -1323,48 +1741,222 @@
         }
       });
 
-      let searchTimer = null;
-      document.getElementById("fish-search").addEventListener("input", () => {
-        clearTimeout(searchTimer);
-        const q = document.getElementById("fish-search").value.trim();
-        if (q.length < 2) {
-          document.getElementById("fish-results").style.display = "none";
+      // ---- Fish List (inline) ----
+
+      const CAUGHT_KEY = "caughtFish";
+
+      function toggleCaught(id) {
+        let list = getList(CAUGHT_KEY);
+        const idx = list.indexOf(id);
+        if (idx >= 0) list.splice(idx, 1);
+        else list.push(id);
+        setList(CAUGHT_KEY, list);
+        renderFishList();
+      }
+
+      function createFishCard(f, opts = {}) {
+        const div = document.createElement("div");
+        div.className = "fish-item" + (opts.caught ? " caught" : "");
+        if (opts.inline)
+          div.style.cssText =
+            "flex:0 0 100%;border:none;padding:0.2rem 0;background:transparent;";
+
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
+        let nextStr = "";
+        const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
+        if (next) {
+          const startUnix = Number(
+            unix_from_eorzea_time(BigInt(next.startEsec)),
+          );
+          const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+          const {whenStr, state} = fmtWhen(
+            startUnix - nowUnix,
+            endUnix - nowUnix,
+          );
+          nextStr = `<span class="fish-next-window ${state}">${state === "future" ? "in " + whenStr : whenStr}</span>`;
+        }
+
+        const weatherStr =
+          (f.previousWeatherSet && f.previousWeatherSet.length
+            ? f.previousWeatherSet.join(" / ") + " → "
+            : "") + (f.weatherSet ? f.weatherSet.join(" / ") : "") || "-";
+        const pct =
+          f.fishUptime !== undefined ? f.fishUptime * 100 : undefined;
+        const uptimeStr =
+          pct !== undefined
+            ? " | " + pct.toFixed(pct < 0.1 ? 2 : 1) + "% uptime"
+            : "";
+        const isFaved = opts.faved || false;
+        const localWindow = `${f.windowStart.split(":").slice(0, 2).join(":")}-${f.windowEnd.split(":").slice(0, 2).join(":")}`;
+        div.innerHTML = `
+            <input type="checkbox" aria-label="Mark ${escapeHtml(f.name)} as caught" ${opts.caught ? "checked" : ""} />
+            <button type="button" class="fav-star${isFaved ? " faved" : ""}" data-fish-id="${f.id}" aria-label="${isFaved ? "Remove fish from favourites" : "Add fish to favourites"}">${isFaved ? "&#9829;" : "&#9825;"}</button>
+            <div class="fish-body" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(f.name)}">
+              <span class="fish-name truncate">${escapeHtml(f.name)} ${nextStr}</span>
+              <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.tug)} ${escapeHtml(f.hookset !== "Unknown" ? f.hookset : "")} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ET ${escapeHtml(localWindow)}</span>
+            </div>
+          `;
+        div.querySelector("input").addEventListener("change", () => {
+          toggleCaught(f.id);
+        });
+        div.querySelector(".fav-star").addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleFavFish(f.id);
+        });
+        const fishBody = div.querySelector(".fish-body");
+        const selectFish = () => {
+          setSelectedFish(f.id);
+          const p = readForm();
+          if (p.schedule.length === 0)
+            p.schedule.push({startSec: 0, endSec: 86400});
+          saveSearch(p);
+          const elStatus = document.getElementById("status");
+          elStatus.className = "status";
+          query(p, fishBody).catch((err) => {
+            elStatus.className = "status error";
+            elStatus.textContent = `Error: ${err}`;
+          });
+        };
+        fishBody.addEventListener("click", selectFish);
+        fishBody.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectFish();
+          }
+        });
+        return div;
+      }
+
+      let _allFishInfo = [];
+
+      function renderFishList() {
+        const caught = getList(CAUGHT_KEY);
+        const favs = getList(FAV_KEY);
+        const hideCaught = document.getElementById("hide-caught").checked;
+        const q = document
+          .getElementById("fish-list-search")
+          .value.trim()
+          .toLowerCase();
+        const scroll = document.getElementById("fish-list-scroll");
+
+        let filtered = _allFishInfo;
+        if (q) {
+          const parts = q.split("&&").map((s) => s.trim());
+          for (const part of parts) {
+            const pq = part.toLowerCase();
+            if (pq.startsWith("zone:")) {
+              const zoneQ = pq.slice(5);
+              filtered = filtered.filter(
+                (f) =>
+                  f.region.toLowerCase().includes(zoneQ) ||
+                  f.location.toLowerCase().includes(zoneQ),
+              );
+            } else if (pq.startsWith("patch:")) {
+              const patchQ = pq.slice(6);
+              filtered = filtered.filter((f) => f.patch.includes(patchQ));
+            } else if (pq.startsWith("uptime>") || pq.startsWith("uptime<")) {
+              const op = pq[6]; // > or <
+              const raw = part.slice(7); // keep original case for number
+              const isPct = raw.endsWith("%");
+              const val = parseFloat(isPct ? raw.slice(0, -1) : raw);
+              if (isNaN(val)) continue;
+              const threshold = isPct ? val / 100 : val;
+              filtered = filtered.filter((f) =>
+                op === ">"
+                  ? f.fishUptime > threshold
+                  : f.fishUptime < threshold,
+              );
+            } else {
+              filtered = filtered.filter((f) =>
+                f.name.toLowerCase().includes(pq),
+              );
+            }
+          }
+        }
+
+        // sort: favourites first, then alphabetically
+        filtered = filtered.slice().sort((a, b) => {
+          const aFav = favs.includes(a.id) ? 0 : 1;
+          const bFav = favs.includes(b.id) ? 0 : 1;
+          if (aFav !== bFav) return aFav - bFav;
+          return a.name.localeCompare(b.name);
+        });
+
+        if (hideCaught) {
+          filtered = filtered.filter((f) => !caught.includes(f.id));
+        }
+
+        const total = _allFishInfo.length;
+        const caughtCount = caught.length;
+        const favCount = favs.length;
+        document.getElementById("fish-list-stats-text").textContent =
+          `| ${caughtCount}/${total} caught | ${favCount} faved` +
+          (q || hideCaught ? ` | ${filtered.length} shown` : "");
+
+        scroll.innerHTML = "";
+        if (filtered.length === 0) {
+          scroll.innerHTML =
+            '<div class="fish-empty">No fish match your filter.</div>';
           return;
         }
-        searchTimer = setTimeout(async () => {
-          try {
-            const raw = await search_fish(q);
-            const results = JSON.parse(raw);
-            const container = document.getElementById("fish-results");
-            container.innerHTML = "";
-            if (results.length === 0) {
-              container.style.display = "none";
-              return;
-            }
-            for (const r of results) {
-              const div = document.createElement("div");
-              div.textContent = `${r.name} (${r.id})`;
-              div.addEventListener("click", () =>
-                setSelectedFish(r.id, r.name),
-              );
-              container.appendChild(div);
-            }
-            container.style.display = "block";
-          } catch {
-            document.getElementById("fish-results").style.display = "none";
-          }
-        }, 200);
-      });
+
+        for (const f of filtered) {
+          const opts = {
+            caught: caught.includes(f.id),
+            faved: favs.includes(f.id),
+          };
+          scroll.appendChild(createFishCard(f, opts));
+        }
+      }
+
+      let _fishSearchTimer = null;
+
+      document
+        .getElementById("fish-list-search")
+        .addEventListener("input", () => {
+          clearTimeout(_fishSearchTimer);
+          _fishSearchTimer = setTimeout(renderFishList, 100);
+        });
+
+      document
+        .getElementById("hide-caught")
+        .addEventListener("change", () => {
+          renderFishList();
+        });
+
+      document
+        .getElementById("fish-list-search-clear")
+        .addEventListener("click", () => {
+          document.getElementById("fish-list-search").value = "";
+          renderFishList();
+        });
+
+      document
+        .getElementById("filter-help")
+        .addEventListener("click", (event) => {
+          const box = document.getElementById("filter-help-box");
+          const visible = box.classList.toggle("visible");
+          event.currentTarget.setAttribute("aria-expanded", String(visible));
+        });
 
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".search-wrap")) {
-          document.getElementById("fish-results").style.display = "none";
+        if (
+          !e.target.closest("#filter-help") &&
+          !e.target.closest("#filter-help-box")
+        ) {
+          document
+            .getElementById("filter-help-box")
+            .classList.remove("visible");
+          document
+            .getElementById("filter-help")
+            .setAttribute("aria-expanded", "false");
         }
       });
 
       main();
     </script>
-  </div>
+  </main>
   <footer>
     FINAL FANTASY is a registered trademark of Square Enix Holdings Co.,
     Ltd.<br />
