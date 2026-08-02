@@ -22,7 +22,7 @@ pub struct WeatherForecast {
 
 impl WeatherForecast {
     pub fn new(region: String, mut weather_rates: Vec<(u8, Weather)>) -> WeatherForecast {
-        weather_rates.sort_by(|(n, _), (n2, _)| n.cmp(n2));
+        weather_rates.sort_by_key(|(n, _)| *n);
         WeatherForecast {
             region,
             weather_rates,
@@ -73,6 +73,33 @@ impl WeatherForecast {
         }
 
         None
+    }
+
+    pub fn pattern_uptime(
+        &self,
+        previous_weather_set: &[Weather],
+        current_weather_set: &[Weather],
+    ) -> f64 {
+        let prob = |set: &[Weather]| -> f64 {
+            if set.is_empty() {
+                return 1.0;
+            }
+            let max = *self.weather_rates.last().map(|(n, _)| n).unwrap_or(&1) as f64;
+            let mut prev = 0u8;
+            let mut matched = 0u8;
+            for (rate, weather) in &self.weather_rates {
+                if set.contains(weather) {
+                    matched += rate - prev;
+                }
+                prev = *rate;
+            }
+            matched as f64 / max
+        };
+        prob(previous_weather_set) * prob(current_weather_set)
+    }
+
+    pub fn weather_uptime(&self, weather_set: &[Weather]) -> f64 {
+        self.pattern_uptime(&[], weather_set)
     }
 
     pub fn find_next_n_patterns(
@@ -220,6 +247,22 @@ mod tests {
             1000,
         );
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn pattern_uptime() {
+        let forecast = WeatherForecast::new(
+            "".to_string(),
+            vec![(50, Weather::Clouds), (100, Weather::Sunny)],
+        );
+        let sunny = vec![Weather::Sunny];
+        assert_eq!(forecast.pattern_uptime(&sunny, &sunny), 0.25);
+        assert_eq!(forecast.pattern_uptime(&[], &sunny), 0.5);
+        assert_eq!(forecast.pattern_uptime(&[], &[]), 1.0);
+        assert_eq!(
+            forecast.pattern_uptime(&[Weather::Unknown], &[Weather::Unknown]),
+            0.0
+        );
     }
 
     #[test]

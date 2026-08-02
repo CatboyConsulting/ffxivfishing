@@ -7,7 +7,7 @@ use chrono::{Offset, TimeZone, Utc};
 use chrono_tz::Tz;
 use ffxivfishing::{
     carbuncledata,
-    eorzea_time::EorzeaTime,
+    eorzea_time::{EorzeaTime, EORZEA_SUN},
     fish::{Fish, FishData},
 };
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,10 @@ struct FishInfo {
     window_end: String,
     previous_weather_set: Vec<String>,
     weather_set: Vec<String>,
+    previous_weather_uptime: f64,
+    weather_uptime: f64,
+    pattern_uptime: f64,
+    fish_uptime: f64,
     patch: String,
 }
 
@@ -96,6 +100,17 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     } else {
         format!("{}.{}", p.0, p.1)
     };
+    let weather = fish.location.region().weather();
+    let prev_uptime = weather.weather_uptime(&fish.previous_weather_set);
+    let curr_uptime = weather.weather_uptime(&fish.weather_set);
+    let pat_uptime = weather.pattern_uptime(&fish.previous_weather_set, &fish.weather_set);
+
+    let day = EORZEA_SUN.total_seconds();
+    let start = fish.window_start.total_seconds();
+    let end = fish.window_end.total_seconds();
+    let window_len = if end > start { end - start } else { end + day - start };
+    let fish_uptime = pat_uptime * (window_len as f64 / day as f64);
+
     FishInfo {
         id: fish.id,
         name: fish.name.clone(),
@@ -108,6 +123,10 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
         window_end: fish.window_end.to_string(),
         previous_weather_set: fish.previous_weather_set.iter().map(|w| fd.weather_name(w)).collect(),
         weather_set: fish.weather_set.iter().map(|w| fd.weather_name(w)).collect(),
+        previous_weather_uptime: prev_uptime,
+        weather_uptime: curr_uptime,
+        pattern_uptime: pat_uptime,
+        fish_uptime: fish_uptime,
         patch: patch_str,
     }
 }
