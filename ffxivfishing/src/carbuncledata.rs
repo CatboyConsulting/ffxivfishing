@@ -171,11 +171,14 @@ impl CarbuncleFish {
     }
 
     fn try_get_intuition(&self) -> Option<Intuition> {
-        self.intuition_length.map(|l| {
-            Intuition::new(
-                Duration::from_secs(l as u64),
-                self.predators.iter().map(|p| (p[1] as u8, p[0])).collect(),
-            )
+        if self.intuition_length.is_none() && self.predators.is_empty() {
+            return None;
+        }
+
+        let requirements = self.predators.iter().map(|p| (p[1] as u8, p[0])).collect();
+        Some(match self.intuition_length {
+            Some(length) => Intuition::new(Duration::from_secs(length as u64), requirements),
+            None => Intuition::without_length(requirements),
         })
     }
 

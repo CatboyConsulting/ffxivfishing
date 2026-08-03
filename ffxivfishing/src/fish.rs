@@ -204,21 +204,30 @@ impl FishWindowDefinition {
 
 #[derive(Debug)]
 pub struct Intuition {
-    length: Duration,
+    length: Option<Duration>,
     requirements: Vec<(u8, u32)>,
     resolved_requirements: Option<Vec<(u8, Option<FishWindowDefinition>)>>,
 }
 impl Intuition {
     pub(crate) fn new(length: Duration, requirements: Vec<(u8, u32)>) -> Self {
         Self {
-            length,
+            length: Some(length),
             requirements,
             resolved_requirements: None,
         }
     }
 
-    fn length_eorzea(&self) -> EorzeaDuration {
-        EorzeaDuration::from_esecs((self.length.as_secs() * 3_600 + 87) / 175)
+    pub(crate) fn without_length(requirements: Vec<(u8, u32)>) -> Self {
+        Self {
+            length: None,
+            requirements,
+            resolved_requirements: None,
+        }
+    }
+
+    fn length_eorzea(&self) -> Option<EorzeaDuration> {
+        self.length
+            .map(|length| EorzeaDuration::from_esecs((length.as_secs() * 3_600 + 87) / 175))
     }
 }
 
@@ -367,21 +376,20 @@ impl Fish {
             Some(intuition) => intuition,
             None => return Some(window.clone()),
         };
+        let intuition_length = match intuition.length_eorzea() {
+            Some(length) => length,
+            None => return Some(window.clone()),
+        };
         let requirements = match &intuition.resolved_requirements {
             Some(requirements) => requirements,
             None => return None,
         };
 
-        let always_available = self.is_always_available();
         let lookback_esecs = ((intuition_lookback_minutes as u128 * 60 * 3_600 + 87) / 175)
             .min(u64::MAX as u128) as u64;
         let lookback = EorzeaDuration::from_esecs(lookback_esecs);
         let preparation_start = window.start() - lookback;
-        let preparation_end = if always_available {
-            window.end()
-        } else {
-            window.start()
-        };
+        let preparation_end = window.end();
 
         let mut last_prerequisite = None;
         for (_, prerequisite) in requirements {
@@ -397,7 +405,7 @@ impl Fish {
         }
 
         let last_prerequisite = last_prerequisite?;
-        let intuition_end = last_prerequisite.end() + intuition.length_eorzea();
+        let intuition_end = last_prerequisite.end() + intuition_length;
         let start = std::cmp::max(window.start(), last_prerequisite.start());
         let end = std::cmp::min(window.end(), intuition_end);
         EorzeaTimeSpan::new_start_end(start, end).ok()
@@ -464,7 +472,7 @@ impl Fish {
     pub fn intuition_length_seconds(&self) -> Option<u64> {
         self.intuition
             .as_ref()
-            .map(|intuition| intuition.length.as_secs())
+            .and_then(|intuition| intuition.length.map(|length| length.as_secs()))
     }
 }
 
