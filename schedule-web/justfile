@@ -3,8 +3,10 @@ build:
 
 dist: build
     mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html favicon.ico dist/
+    sed -i "s/__BUILD_NUMBER__/$(date +%Y%m%d)/g" dist/index.html
 
 deploy: dist
+    @printf "Deploy to production? Enter y to continue: "; read -r reply; test "$reply" = "y"
     wrangler pages deploy dist --project-name ffxivfishing
 
 deploy-no-build:
