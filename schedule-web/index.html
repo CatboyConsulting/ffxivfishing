@@ -458,6 +458,12 @@
       display: block;
     }
 
+    .fish-item .fish-requirement {
+      color: var(--text-primary);
+      font-size: 0.75rem;
+      display: block;
+    }
+
     .fish-item .fav-star {
       flex-shrink: 0;
       background: none;
@@ -910,6 +916,19 @@
         const h = Math.floor(secs / 3600);
         const m = Math.floor((secs % 3600) / 60);
         return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+      }
+
+      function formatRealDuration(seconds) {
+        const total = Number(seconds);
+        if (!Number.isFinite(total) || total < 0) return "";
+        const hours = Math.floor(total / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        const secs = total % 60;
+        return (
+          (hours ? `${hours}h` : "") +
+          (minutes ? `${minutes}m` : "") +
+          (secs || (!hours && !minutes) ? `${secs}s` : "")
+        );
       }
 
       function fmtWhen(diffSec, endDiffSec) {
@@ -1578,7 +1597,9 @@
           button.classList.toggle("faved", isFaved);
           button.setAttribute(
             "aria-label",
-            isFaved ? "Remove fish from favourites" : "Add fish to favourites",
+            isFaved
+              ? "Remove fish from favourites"
+              : "Add fish to favourites",
           );
           button.innerHTML = isFaved ? "&#9829;" : "&#9825;";
         });
@@ -1787,6 +1808,44 @@
           pct !== undefined
             ? " | " + pct.toFixed(pct < 0.1 ? 2 : 1) + "% uptime"
             : "";
+        const requirementLines = [];
+        if (opts.inline) {
+          if (f.bait) {
+            requirementLines.push(`Bait: ${f.bait}`);
+          }
+          if (Array.isArray(f.moochPath) && f.moochPath.length) {
+            requirementLines.push(`Mooch: ${f.moochPath.join(" -> ")}`);
+          }
+          if (
+            Array.isArray(f.intuitionRequirements) &&
+            f.intuitionRequirements.length
+          ) {
+            const intuitionLength = formatRealDuration(
+              f.intuitionLengthSeconds,
+            );
+            requirementLines.push(
+              `Intuition${intuitionLength ? ` (${intuitionLength})` : ""}: ` +
+              f.intuitionRequirements
+                .map(
+                  (requirement) =>
+                    `${requirement.amount} ${requirement.fish}`,
+                )
+                .join(" | "),
+            );
+          }
+          const technique = [`Tug: ${f.tug}`, `Hookset: ${f.hookset}`];
+          if (f.snagging) technique.push("Snagging");
+          if (f.lure && f.lureProc) {
+            technique.push(`Lure: ${f.lure === "Ambitious" ? "A" : "M"}`);
+          }
+          requirementLines.push(technique.join(" | "));
+        }
+        const requirementsHtml = requirementLines
+          .map(
+            (line) =>
+              `<span class="fish-requirement">${escapeHtml(line)}</span>`,
+          )
+          .join("");
         const isFaved = opts.faved || false;
         const localWindow = `${f.windowStart.split(":").slice(0, 2).join(":")}-${f.windowEnd.split(":").slice(0, 2).join(":")}`;
         div.innerHTML = `
@@ -1794,7 +1853,8 @@
             <button type="button" class="fav-star${isFaved ? " faved" : ""}" data-fish-id="${f.id}" aria-label="${isFaved ? "Remove fish from favourites" : "Add fish to favourites"}">${isFaved ? "&#9829;" : "&#9825;"}</button>
             <div class="fish-body" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(f.name)}">
               <span class="fish-name truncate">${escapeHtml(f.name)} ${nextStr}</span>
-              <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.tug)} ${escapeHtml(f.hookset !== "Unknown" ? f.hookset : "")} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ET ${escapeHtml(localWindow)}</span>
+              <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ET ${escapeHtml(localWindow)}</span>
+              ${requirementsHtml}
             </div>
           `;
         div.querySelector("input").addEventListener("change", () => {

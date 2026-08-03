@@ -10,7 +10,7 @@ use color_eyre::Result;
 
 use ffxivfishing::{
     eorzea_time::{EorzeaTime, EorzeaTimeSpan},
-    fish::{FishData, FishingItem},
+    fish::{DEFAULT_INTUITION_LOOKBACK_MINUTES, FishData, FishingItem},
 };
 use ratatui::crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
@@ -201,7 +201,13 @@ impl App {
                     .iter()
                     .filter(|f| f.name.contains(self.input.value()))
                     .filter_map(|f| {
-                        let next_window = f.next_window(EorzeaTime::now(), true, 1_000)?;
+                        let next_window = f.next_window(
+                            EorzeaTime::now(),
+                            true,
+                            false,
+                            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                            1_000,
+                        )?;
                         Some(FishListItem {
                             name: f.name().to_string(),
                             id: f.id,

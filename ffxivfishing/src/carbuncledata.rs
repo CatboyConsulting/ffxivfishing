@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::{error::Error, rc::Rc, time::Duration};
 
 use serde::{Deserialize, Serialize};
@@ -151,7 +151,11 @@ impl From<&CarbuncleWeatherRates> for WeatherForecast {
 }
 
 impl CarbuncleFishingSpot {
-    fn to_fishinghole(&self, regions: &[Rc<Region>], wr_key_to_idx: &HashMap<String, usize>) -> Option<FishingHole> {
+    fn to_fishinghole(
+        &self,
+        regions: &[Rc<Region>],
+        wr_key_to_idx: &HashMap<String, usize>,
+    ) -> Option<FishingHole> {
         let idx = wr_key_to_idx.get(&self.territory_id.to_string())?;
         let region = regions.get(*idx)?.clone();
         Some(FishingHole::new(self.id, self.name.clone(), region))
@@ -159,6 +163,13 @@ impl CarbuncleFishingSpot {
 }
 
 impl CarbuncleFish {
+    fn lure_type(&self) -> Lure {
+        match self.lure.as_deref() {
+            Some(value) if value.eq_ignore_ascii_case("Ambitious") => Lure::Ambitious,
+            _ => Lure::Modest,
+        }
+    }
+
     fn try_get_intuition(&self) -> Option<Intuition> {
         self.intuition_length.map(|l| {
             Intuition::new(
@@ -168,18 +179,36 @@ impl CarbuncleFish {
         })
     }
 
-    fn to_fish(&self, fishing_holes: &[Rc<FishingHole>], items: &[&CarbuncleItem]) -> Option<Fish> {
+    fn to_fish(
+        &self,
+        fishing_holes: &[Rc<FishingHole>],
+        items: &[&CarbuncleItem],
+        fish_ids: &HashSet<u32>,
+    ) -> Option<Fish> {
         let loc = self.location?;
-        let fish_hole = fishing_holes
-            .iter()
-            .find(|fh| fh.id() == loc)?;
+        let fish_hole = fishing_holes.iter().find(|fh| fh.id() == loc)?;
         let item = items.iter().find(|i| self.id == i.id)?;
 
-        let bait = match self.best_catch_path.last() {
-            Some(OneOrVec::One(o)) => Bait::Bait(*o),
-            Some(OneOrVec::Vec(o)) if o.is_empty() => Bait::Unknown,
-            Some(OneOrVec::Vec(o)) => Bait::Bait(*o.last().unwrap()),
-            None => Bait::Unknown,
+        let catch_path: Vec<u32> = self
+            .best_catch_path
+            .iter()
+            .filter_map(|path| match path {
+                OneOrVec::One(id) => Some(*id),
+                OneOrVec::Vec(ids) => ids.last().copied(),
+            })
+            .collect();
+        let first_fish = catch_path.iter().position(|id| fish_ids.contains(id));
+        let bait = match (catch_path.first().copied(), first_fish) {
+            (Some(bait_id), Some(first_fish)) => Bait::Mooch {
+                bait_id: (first_fish > 0).then_some(bait_id),
+                fish_ids: catch_path[first_fish..].to_vec(),
+            },
+            (_, None) => catch_path
+                .last()
+                .copied()
+                .map(Bait::Bait)
+                .unwrap_or(Bait::Unknown),
+            (None, _) => Bait::Unknown,
         };
         Some(Fish::new(
             self.id,
@@ -200,7 +229,7 @@ impl CarbuncleFish {
                 .as_str()
                 .into(),
             self.try_get_intuition(),
-            Lure::Moderate,
+            self.lure_type(),
             self.lure.is_some(),
             self.snagging.unwrap_or(false),
             false,
@@ -275,6 +304,7 @@ impl CarbuncleData {
             .collect();
 
         let items: Vec<&CarbuncleItem> = self.items.values().collect();
+        let fish_ids: HashSet<u32> = self.fishes.values().map(|fish| fish.id).collect();
 
         let wr_key_to_idx: HashMap<String, usize> = weather_rates
             .keys()
@@ -305,7 +335,7 @@ impl CarbuncleData {
         let fishes: Vec<Fish> = self
             .fishes
             .values()
-            .filter_map(|f| f.to_fish(&fishing_holes, &items))
+            .filter_map(|f| f.to_fish(&fishing_holes, &items, &fish_ids))
             .collect();
         let fishing_items = items
             .iter()
@@ -329,7 +359,7 @@ mod tests {
 
     use std::time::SystemTime;
 
-    use crate::eorzea_time::EorzeaTime;
+    use crate::{eorzea_time::EorzeaTime, fish::DEFAULT_INTUITION_LOOKBACK_MINUTES};
 
     use super::*;
     #[test]
@@ -361,12 +391,26 @@ mod tests {
             let loc = fish.location.name();
             let reg = fish.location.region().name();
             println!("fish={}, location='{}', region='{}'", fish.name, loc, reg);
-            if loc.chars().all(|c| c.is_ascii_digit()) { numeric_loc += 1; }
-            if reg.chars().all(|c| c.is_ascii_digit()) { numeric_reg += 1; }
+            if loc.chars().all(|c| c.is_ascii_digit()) {
+                numeric_loc += 1;
+            }
+            if reg.chars().all(|c| c.is_ascii_digit()) {
+                numeric_reg += 1;
+            }
         }
         for fish in fishes.fishes() {
-            if fish.location.name().chars().all(|c| c.is_ascii_digit()) { numeric_loc += 1; }
-            if fish.location.region().name().chars().all(|c| c.is_ascii_digit()) { numeric_reg += 1; }
+            if fish.location.name().chars().all(|c| c.is_ascii_digit()) {
+                numeric_loc += 1;
+            }
+            if fish
+                .location
+                .region()
+                .name()
+                .chars()
+                .all(|c| c.is_ascii_digit())
+            {
+                numeric_reg += 1;
+            }
         }
         println!("Fish with numeric locations: {}", numeric_loc);
         println!("Fish with numeric regions: {}", numeric_reg);
@@ -382,6 +426,8 @@ mod tests {
             let window = fish.next_window(
                 EorzeaTime::from_time(&SystemTime::now()).unwrap(),
                 false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 1_000,
             );
             match window {
@@ -399,5 +445,50 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn warden_of_the_seven_hues_intuition_windows() {
+        let data = carbuncle_fishes().unwrap();
+        let fish = data.fish_by_id(24994).unwrap();
+        let first = fish
+            .next_window(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                false,
+                true,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .unwrap();
+        assert_eq!(first.start(), EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap());
+
+        let mut current = EorzeaTime::now();
+
+        for _ in 1..=10 {
+            let window = fish
+                .next_window(
+                    current,
+                    false,
+                    true,
+                    DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                    10_000,
+                )
+                .expect("missing Warden window");
+            assert_eq!(window.duration(), EorzeaDuration::from_esecs(86_400));
+            current = window.end();
+        }
+    }
+
+    #[test]
+    fn requirement_metadata_is_resolved() {
+        let data = carbuncle_fishes().unwrap();
+        let warden = data.fish_by_id(24994).unwrap();
+        assert_eq!(
+            warden.intuition_requirements(),
+            Some(&[(3, 24203), (3, 23056), (5, 24204)][..])
+        );
+
+        let mooching_fish = data.fish_by_id(4904).unwrap();
+        assert_eq!(mooching_fish.mooch_id(), Some(4869));
     }
 }

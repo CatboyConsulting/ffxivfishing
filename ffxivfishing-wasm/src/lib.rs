@@ -7,14 +7,21 @@ use chrono::{Offset, TimeZone, Utc};
 use chrono_tz::Tz;
 use ffxivfishing::{
     carbuncledata,
-    eorzea_time::{EorzeaTime, EORZEA_SUN},
-    fish::{Fish, FishData},
+    eorzea_time::{EORZEA_SUN, EorzeaTime},
+    fish::{DEFAULT_INTUITION_LOOKBACK_MINUTES, Fish, FishData},
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 thread_local! {
     static FISH_DATA: OnceCell<FishData> = const { OnceCell::new() };
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IntuitionRequirementInfo {
+    amount: u8,
+    fish: String,
 }
 
 #[derive(Serialize)]
@@ -27,6 +34,11 @@ struct FishInfo {
     tug: String,
     hookset: String,
     bait_id: Option<u32>,
+    bait: Option<String>,
+    mooch_path: Vec<String>,
+    snagging: bool,
+    lure: Option<String>,
+    lure_proc: bool,
     window_start: String,
     window_end: String,
     previous_weather_set: Vec<String>,
@@ -36,6 +48,8 @@ struct FishInfo {
     pattern_uptime: f64,
     fish_uptime: f64,
     patch: String,
+    intuition_requirements: Vec<IntuitionRequirementInfo>,
+    intuition_length_seconds: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -108,8 +122,34 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     let day = EORZEA_SUN.total_seconds();
     let start = fish.window_start.total_seconds();
     let end = fish.window_end.total_seconds();
-    let window_len = if end > start { end - start } else { end + day - start };
+    let window_len = if end > start {
+        end - start
+    } else {
+        end + day - start
+    };
     let fish_uptime = pat_uptime * (window_len as f64 / day as f64);
+    let item_name = |id: u32| {
+        fd.item_by_id(id)
+            .map(|item| item.name().to_string())
+            .unwrap_or_else(|| format!("Unknown item ({id})"))
+    };
+    let intuition_requirements = fish
+        .intuition_requirements()
+        .unwrap_or_default()
+        .iter()
+        .map(|(amount, id)| IntuitionRequirementInfo {
+            amount: *amount,
+            fish: item_name(*id),
+        })
+        .collect();
+    let bait = fish.base_bait_id().map(item_name);
+    let mooch_path = fish
+        .mooch_path()
+        .unwrap_or_default()
+        .iter()
+        .map(|id| item_name(*id))
+        .collect();
+    let lure = fish.lure_proc.then(|| fish.lure.to_string());
 
     FishInfo {
         id: fish.id,
@@ -119,15 +159,30 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
         tug: fish.tug.to_string(),
         hookset: fish.hookset.to_string(),
         bait_id: fish.bait_id(),
+        bait,
+        mooch_path,
+        snagging: fish.snagging,
+        lure,
+        lure_proc: fish.lure_proc,
         window_start: fish.window_start.to_string(),
         window_end: fish.window_end.to_string(),
-        previous_weather_set: fish.previous_weather_set.iter().map(|w| fd.weather_name(w)).collect(),
-        weather_set: fish.weather_set.iter().map(|w| fd.weather_name(w)).collect(),
+        previous_weather_set: fish
+            .previous_weather_set
+            .iter()
+            .map(|w| fd.weather_name(w))
+            .collect(),
+        weather_set: fish
+            .weather_set
+            .iter()
+            .map(|w| fd.weather_name(w))
+            .collect(),
         previous_weather_uptime: prev_uptime,
         weather_uptime: curr_uptime,
         pattern_uptime: pat_uptime,
         fish_uptime: fish_uptime,
         patch: patch_str,
+        intuition_requirements,
+        intuition_length_seconds: fish.intuition_length_seconds(),
     }
 }
 
@@ -160,11 +215,11 @@ fn window_overlaps_any_schedule(
             continue;
         }
 
-        let dt = Utc
-            .timestamp_opt(day_midnight as i64, 0)
-            .single()
-            .unwrap();
-        let local_minus_utc = tz.offset_from_utc_datetime(&dt.naive_utc()).fix().local_minus_utc();
+        let dt = Utc.timestamp_opt(day_midnight as i64, 0).single().unwrap();
+        let local_minus_utc = tz
+            .offset_from_utc_datetime(&dt.naive_utc())
+            .fix()
+            .local_minus_utc();
         let offset = -local_minus_utc as i64;
 
         let local_start = portion_start as i64 - offset;
@@ -217,7 +272,8 @@ pub fn get_fish(fish_id: u32) -> Result<String, JsValue> {
         let fish = fd
             .fish_by_id(fish_id)
             .ok_or_else(|| JsValue::from_str("Fish not found"))?;
-        serde_json::to_string(&fish_to_info(fish, fd)).map_err(|e| JsValue::from_str(&e.to_string()))
+        serde_json::to_string(&fish_to_info(fish, fd))
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     })
 }
 
@@ -229,7 +285,13 @@ pub fn get_fish_next_window(fish_id: u32, timestamp_esec: u64) -> Result<String,
             .ok_or_else(|| JsValue::from_str("Fish not found"))?;
         let eorzea_time = EorzeaTime::from_esecs(timestamp_esec);
         let max_lookahead = 10000u32;
-        let window = fish.next_window(eorzea_time, false, max_lookahead);
+        let window = fish.next_window(
+            eorzea_time,
+            false,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            max_lookahead,
+        );
         match window {
             Some(fw) => serde_json::to_string(&Some(FishWindow {
                 start_esec: fw.start().as_esecs(),
@@ -255,7 +317,13 @@ pub fn get_fish_windows(fish_id: u32, timestamp_esec: u64, limit: u32) -> Result
         let mut current_time = eorzea_time;
         let mut remaining = limit;
         while remaining > 0 {
-            if let Some(window) = fish.next_window(current_time, false, remaining) {
+            if let Some(window) = fish.next_window(
+                current_time,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                remaining,
+            ) {
                 windows.push(FishWindow {
                     start_esec: window.start().as_esecs(),
                     end_esec: window.end().as_esecs(),
@@ -299,7 +367,13 @@ pub fn get_fish_windows_in_schedule(
         let mut current_et = now_et;
         let max_lookahead = 10000u32;
 
-        while let Some(fw) = fish.next_window(current_et, false, max_lookahead) {
+        while let Some(fw) = fish.next_window(
+            current_et,
+            false,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            max_lookahead,
+        ) {
             let fw_start_rt = fw.start().to_system_time();
             let fw_end_rt = fw.end().to_system_time();
 
@@ -308,12 +382,7 @@ pub fn get_fish_windows_in_schedule(
             }
 
             if fw_end_rt > now_rt
-                && window_overlaps_any_schedule(
-                    fw_start_rt,
-                    fw_end_rt,
-                    &local_schedule,
-                    tz,
-                )
+                && window_overlaps_any_schedule(fw_start_rt, fw_end_rt, &local_schedule, tz)
             {
                 windows.push(FishWindow {
                     start_esec: fw.start().as_esecs(),
@@ -423,109 +492,217 @@ mod tests {
     }
 
     fn bst_secs() -> u64 {
-        Utc.with_ymd_and_hms(2024, 7, 15, 0, 0, 0).single().unwrap().timestamp() as u64
+        Utc.with_ymd_and_hms(2024, 7, 15, 0, 0, 0)
+            .single()
+            .unwrap()
+            .timestamp() as u64
     }
 
     fn gmt_secs() -> u64 {
-        Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).single().unwrap().timestamp() as u64
+        Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0)
+            .single()
+            .unwrap()
+            .timestamp() as u64
     }
 
     #[test]
     fn bst_summer_23_to_24_does_not_match_19_56_utc() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = bst_secs();
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 71760),
             UNIX_EPOCH + Duration::from_secs(b + 72150),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn bst_summer_23_to_24_matches_21_56_utc() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = bst_secs();
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 78960),
             UNIX_EPOCH + Duration::from_secs(b + 79350),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn gmt_winter_23_to_24_does_not_match_19_56_utc() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = gmt_secs();
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 71760),
             UNIX_EPOCH + Duration::from_secs(b + 72150),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn gmt_winter_23_to_24_does_not_match_20_56_utc_but_matches_22_56() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = gmt_secs();
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 75360),
             UNIX_EPOCH + Duration::from_secs(b + 75720),
-            &s, tz()));
+            &s,
+            tz()
+        ));
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 82560),
             UNIX_EPOCH + Duration::from_secs(b + 82920),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn same_utc_window_matches_bst_but_not_gmt() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         // Window at 21:56-22:02 UTC = 22:56-23:02 BST — overlaps 23:00-24:00 BST
-        let ws = 78960u64; let we = 79320u64;
+        let ws = 78960u64;
+        let we = 79320u64;
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(bst_secs() + ws),
             UNIX_EPOCH + Duration::from_secs(bst_secs() + we),
-            &s, tz()));
+            &s,
+            tz()
+        ));
         // Same UTC window = 21:56-22:02 GMT — does NOT overlap 23:00-24:00 GMT
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(gmt_secs() + ws),
             UNIX_EPOCH + Duration::from_secs(gmt_secs() + we),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn partial_overlap_works_correctly() {
-        let s = vec![ScheduleEntry { day_of_week: None, start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: None,
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = bst_secs();
         // 22:00-23:05 UTC = 23:00-00:05 BST — overlaps 23:00-24:00
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 79200),
             UNIX_EPOCH + Duration::from_secs(b + 83100),
-            &s, tz()));
+            &s,
+            tz()
+        ));
         // 22:00-22:30 UTC = 23:00-23:30 BST — entirely inside
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 79200),
             UNIX_EPOCH + Duration::from_secs(b + 81000),
-            &s, tz()));
+            &s,
+            tz()
+        ));
         // 20:00-20:30 UTC = 21:00-21:30 BST — entirely before
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 72000),
             UNIX_EPOCH + Duration::from_secs(b + 73800),
-            &s, tz()));
+            &s,
+            tz()
+        ));
     }
 
     #[test]
     fn day_of_week_filtering_works() {
-        let s = vec![ScheduleEntry { day_of_week: Some(1), start_sec: 82800, end_sec: 86400 }];
+        let s = vec![ScheduleEntry {
+            day_of_week: Some(1),
+            start_sec: 82800,
+            end_sec: 86400,
+        }];
         let b = gmt_secs();
         // Jan 15, 2024 = Monday: (day+4)%7 = 1, dayOfWeek(1) == 1 → should match
-        let win_s = 82860u64; let win_e = 82920u64;
+        let win_s = 82860u64;
+        let win_e = 82920u64;
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + win_s),
             UNIX_EPOCH + Duration::from_secs(b + win_e),
-            &s, tz()));
+            &s,
+            tz()
+        ));
         // Jan 16, 2024 = Tuesday: (day+4)%7 = 2, dayOfWeek(1) != 2 → should NOT match
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs((b + 1 * 86400) + win_s),
             UNIX_EPOCH + Duration::from_secs((b + 1 * 86400) + win_e),
-            &s, tz()));
+            &s,
+            tz()
+        ));
+    }
+
+    #[test]
+    fn fish_info_includes_intuition_and_mooch_requirements() {
+        let data = carbuncledata::carbuncle_fishes().unwrap();
+        let warden = data.fish_by_id(24994).unwrap();
+        let warden_json = serde_json::to_value(fish_to_info(warden, &data)).unwrap();
+        assert_eq!(
+            warden_json["intuitionRequirements"],
+            serde_json::json!([
+                {"amount": 3, "fish": "Indigo Prismfish"},
+                {"amount": 3, "fish": "Firelight Goldfish"},
+                {"amount": 5, "fish": "Green Prismfish"}
+            ])
+        );
+        assert_eq!(warden_json["intuitionLengthSeconds"], 175);
+        assert_eq!(warden_json["bait"], "Stonefly Larva");
+        assert_eq!(warden_json["moochPath"], serde_json::json!([]));
+        assert!(warden_json["lure"].is_null());
+        assert_eq!(warden_json["lureProc"], false);
+
+        let mooching_fish = data.fish_by_id(4904).unwrap();
+        let mooching_json = serde_json::to_value(fish_to_info(mooching_fish, &data)).unwrap();
+        assert_eq!(mooching_json["bait"], "Lugworm");
+        assert_eq!(
+            mooching_json["moochPath"],
+            serde_json::json!(["Merlthor Goby"])
+        );
+
+        let shonisaurus = data.fish_by_id(8772).unwrap();
+        let shonisaurus_json = serde_json::to_value(fish_to_info(shonisaurus, &data)).unwrap();
+        assert_eq!(shonisaurus_json["bait"], "Hoverworm");
+        assert_eq!(
+            shonisaurus_json["moochPath"],
+            serde_json::json!(["Cloud Cutter", "Mahar"])
+        );
+
+        let lure_fish = data.fish_by_id(43685).unwrap();
+        let lure_json = serde_json::to_value(fish_to_info(lure_fish, &data)).unwrap();
+        assert_eq!(lure_json["lure"], "Modest");
+        assert_eq!(lure_json["lureProc"], true);
+        assert_eq!(lure_json["snagging"], false);
+        assert_eq!(lure_json["tug"], "!");
+        assert_eq!(lure_json["hookset"], "Precision");
+
+        let shined_copper_shark = data.fish_by_id(52006).unwrap();
+        let shined_json = serde_json::to_value(fish_to_info(shined_copper_shark, &data)).unwrap();
+        assert!(shined_json["lure"].is_null());
+        assert_eq!(shined_json["lureProc"], false);
     }
 }
-
