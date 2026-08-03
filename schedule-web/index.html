@@ -35,12 +35,24 @@
       padding: 0;
       font-size: 15px;
       line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .container {
       max-width: 960px;
       margin: 0 auto;
       padding: 1rem;
+    }
+
+    main.container {
+      width: 100%;
+      box-sizing: border-box;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     h1 {
@@ -307,6 +319,10 @@
     /* ---- fish list (inline, main content) ---- */
     .fish-list-section {
       border: 1px solid var(--bg-border);
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     .fish-list-section .fish-list-header {
@@ -324,6 +340,19 @@
       flex: 1;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+    }
+
+    .fish-list-section .fish-list-sort {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .fish-list-section .fish-list-sort select {
+      font-size: 0.75rem;
+      padding: 3px 5px;
     }
 
     .fish-list-section .fish-list-search {
@@ -396,10 +425,11 @@
       color: var(--text-muted);
     }
 
-    .fish-list-section .fish-scroll {
-      max-height: 55vh;
-      overflow-y: auto;
-    }
+      .fish-list-section .fish-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
 
     .fish-item {
       display: flex;
@@ -595,11 +625,11 @@
       margin-top: 0.4rem;
     }
 
-    .results-panel .results-scroll {
-      flex: 1;
-      overflow: auto;
-      padding: 0 0.75rem 0.75rem;
-    }
+      .results-panel .results-scroll {
+        flex: 1;
+        overflow: auto;
+        padding: 0 0.75rem 0.75rem;
+      }
 
     .results-panel .results-scroll table {
       margin: 0.5rem 0;
@@ -721,6 +751,13 @@
         padding: 3px 5px;
         font-size: 0.8rem;
       }
+
+      .fish-item .fish-meta {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
+      }
     }
   </style>
 </head>
@@ -774,6 +811,15 @@
     <div class="fish-list-section" id="fish-list-section">
       <div class="fish-list-header">
         <h2>Fish List</h2>
+        <label class="fish-list-sort" for="fish-list-sort">
+          Sort
+          <select id="fish-list-sort">
+            <option value="name">Name</option>
+            <option value="uptime">Uptime (low to high)</option>
+            <option value="patch">Patch (new-&gt;old)</option>
+            <option value="next-window">Next window</option>
+          </select>
+        </label>
       </div>
       <div class="fish-list-search">
         <label class="visually-hidden" for="fish-list-search">Search fish</label>
@@ -821,9 +867,9 @@
         <div id="status" class="status" role="status" aria-live="polite">
           Select a fish to start.
         </div>
-        <div id="fish-info-bar" class="fish-info-bar" style="display: none"></div>
       </div>
       <div class="results-scroll" id="results-scroll">
+        <div id="fish-info-bar" class="fish-info-bar" style="display: none"></div>
         <table id="results" style="display: none">
           <caption class="visually-hidden">
             Fishing windows for the selected fish
@@ -941,6 +987,10 @@
         else if (diffSec < 86400) whenStr = `${Math.floor(diffSec / 3600)}h`;
         else whenStr = `${Math.floor(diffSec / 86400)}d`;
         return {whenStr, state: "future"};
+      }
+
+      function isAlwaysUp(fish) {
+        return Number.isFinite(fish.fishUptime) && fish.fishUptime >= 1;
       }
 
       let _nextWindowCacheMinute = -1;
@@ -1156,6 +1206,22 @@
               inline: true,
             }),
           );
+
+          const alwaysUp =
+            isAlwaysUp(fishInfo) &&
+            !fishInfo.intuitionRequirements?.length &&
+            !fishInfo.moochPath?.length;
+          if (alwaysUp) {
+            _lastWindows = [];
+            elStatus.textContent = "Fish is always up.";
+            elTable.style.display = "";
+            document.getElementById("download-ics").style.display = "none";
+            const row = document.createElement("tr");
+            row.innerHTML = '<td colspan="6">always up</td>';
+            elTbody.appendChild(row);
+            openResults(trigger);
+            return;
+          }
 
           const windowsJson = await withTimeout(
             get_fish_windows_in_schedule(
@@ -1376,6 +1442,7 @@
         renderSavedWindows();
         startSavedWindowTimer();
         updateSaveButtons();
+        renderFishList();
       }
 
       function removeSavedWindow(w) {
@@ -1386,6 +1453,7 @@
         renderSavedWindows();
         startSavedWindowTimer();
         updateSaveButtons();
+        renderFishList();
       }
 
       function downloadSavedIcs() {
@@ -1502,6 +1570,7 @@
       }
 
       let _savedTimerId = null;
+      let _fishListTimerId = null;
 
       function updateSavedWindowTimers() {
         const nowUnix = Math.floor(Date.now() / 1000);
@@ -1553,6 +1622,13 @@
         }, interval);
 
         updateSavedWindowTimers();
+      }
+
+      function startFishListTimer() {
+        if (_fishListTimerId) {
+          clearInterval(_fishListTimerId);
+        }
+        _fishListTimerId = setInterval(renderFishList, 15 * 60 * 1000);
       }
 
       function updateSaveButtons() {
@@ -1686,6 +1762,7 @@
             _allFishInfo = JSON.parse(raw);
           } catch { }
           renderFishList();
+          startFishListTimer();
         } catch (err) {
           elStatus.className = "status error";
           elStatus.textContent = `Error: ${err}`;
@@ -1785,17 +1862,21 @@
         const nowUnix = Math.floor(Date.now() / 1000);
         const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
         let nextStr = "";
-        const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
-        if (next) {
-          const startUnix = Number(
-            unix_from_eorzea_time(BigInt(next.startEsec)),
-          );
-          const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
-          const {whenStr, state} = fmtWhen(
-            startUnix - nowUnix,
-            endUnix - nowUnix,
-          );
-          nextStr = `<span class="fish-next-window ${state}">${state === "future" ? "in " + whenStr : whenStr}</span>`;
+        if (isAlwaysUp(f)) {
+          nextStr = '<span class="fish-next-window">always up</span>';
+        } else {
+          const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
+          if (next) {
+            const startUnix = Number(
+              unix_from_eorzea_time(BigInt(next.startEsec)),
+            );
+            const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+            const {whenStr, state} = fmtWhen(
+              startUnix - nowUnix,
+              endUnix - nowUnix,
+            );
+            nextStr = `<span class="fish-next-window ${state}">${state === "future" ? "in " + whenStr : whenStr}</span>`;
+          }
         }
 
         const weatherStr =
@@ -1847,12 +1928,20 @@
           )
           .join("");
         const isFaved = opts.faved || false;
+        const activeSavedCount = opts.inline
+          ? 0
+          : getSavedWindows().filter(
+              (saved) =>
+                saved.fishId === f.id &&
+                BigInt(saved.endEsec) > BigInt(nowEorzea),
+            ).length;
+        const displayName = `${f.name}${activeSavedCount ? ` (${activeSavedCount})` : ""}`;
         const localWindow = `${f.windowStart.split(":").slice(0, 2).join(":")}-${f.windowEnd.split(":").slice(0, 2).join(":")}`;
         div.innerHTML = `
             <input type="checkbox" aria-label="Mark ${escapeHtml(f.name)} as caught" ${opts.caught ? "checked" : ""} />
             <button type="button" class="fav-star${isFaved ? " faved" : ""}" data-fish-id="${f.id}" aria-label="${isFaved ? "Remove fish from favourites" : "Add fish to favourites"}">${isFaved ? "&#9829;" : "&#9825;"}</button>
             <div class="fish-body" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(f.name)}">
-              <span class="fish-name truncate">${escapeHtml(f.name)} ${nextStr}</span>
+              <span class="fish-name truncate">${escapeHtml(displayName)} ${nextStr}</span>
               <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ET ${escapeHtml(localWindow)}</span>
               ${requirementsHtml}
             </div>
@@ -1890,6 +1979,39 @@
 
       let _allFishInfo = [];
 
+      function patchSortValue(patch) {
+        const parts = String(patch).split(".");
+        const major = Number(parts[0]);
+        const minor = Number(parts[1] || 0);
+        return Number.isFinite(major) && Number.isFinite(minor)
+          ? major * 100 + minor
+          : Infinity;
+      }
+
+      function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
+        if (sort === "uptime") {
+          const uptimeDiff = (a.fishUptime ?? Infinity) - (b.fishUptime ?? Infinity);
+          if (uptimeDiff !== 0) return uptimeDiff;
+        } else if (sort === "patch") {
+          const patchDiff = patchSortValue(b.patch) - patchSortValue(a.patch);
+          if (patchDiff !== 0) return patchDiff;
+        } else if (sort === "next-window") {
+          const aWindow = getNextFishWindow(a.id, nowUnix, nowEorzea);
+          const bWindow = getNextFishWindow(b.id, nowUnix, nowEorzea);
+          if (aWindow && !bWindow) return -1;
+          if (!aWindow && bWindow) return 1;
+          if (aWindow && bWindow) {
+            const nextDiff = BigInt(aWindow.startEsec) < BigInt(bWindow.startEsec)
+              ? -1
+              : BigInt(aWindow.startEsec) > BigInt(bWindow.startEsec)
+                ? 1
+                : 0;
+            if (nextDiff !== 0) return nextDiff;
+          }
+        }
+        return a.name.localeCompare(b.name);
+      }
+
       function renderFishList() {
         const caught = getList(CAUGHT_KEY);
         const favs = getList(FAV_KEY);
@@ -1898,6 +2020,9 @@
           .getElementById("fish-list-search")
           .value.trim()
           .toLowerCase();
+        const sort = document.getElementById("fish-list-sort").value;
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
         const scroll = document.getElementById("fish-list-scroll");
 
         let filtered = _allFishInfo;
@@ -1935,12 +2060,12 @@
           }
         }
 
-        // sort: favourites first, then alphabetically
+        // Keep favourites first, then apply the selected sort.
         filtered = filtered.slice().sort((a, b) => {
           const aFav = favs.includes(a.id) ? 0 : 1;
           const bFav = favs.includes(b.id) ? 0 : 1;
           if (aFav !== bFav) return aFav - bFav;
-          return a.name.localeCompare(b.name);
+          return compareFishBySort(a, b, sort, nowUnix, nowEorzea);
         });
 
         if (hideCaught) {
@@ -1952,7 +2077,8 @@
         const favCount = favs.length;
         document.getElementById("fish-list-stats-text").textContent =
           `| ${caughtCount}/${total} caught | ${favCount} faved` +
-          (q || hideCaught ? ` | ${filtered.length} shown` : "");
+          (q || hideCaught ? ` | ${filtered.length} shown` : "") +
+          ` | Last updated: ${new Date().toLocaleTimeString()}`;
 
         scroll.innerHTML = "";
         if (filtered.length === 0) {
@@ -1981,6 +2107,12 @@
 
       document
         .getElementById("hide-caught")
+        .addEventListener("change", () => {
+          renderFishList();
+        });
+
+      document
+        .getElementById("fish-list-sort")
         .addEventListener("change", () => {
           renderFishList();
         });
