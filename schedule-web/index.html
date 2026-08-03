@@ -915,6 +915,7 @@
         {value: "6", label: "Sat"},
         {value: "0", label: "Sun"},
       ];
+      const FILTER_INTUITION = true;
 
       let _savedOpen = true;
 
@@ -1004,7 +1005,11 @@
         }
         if (_nextWindowCache.has(id)) return _nextWindowCache.get(id);
         try {
-          const nextJson = get_fish_next_window(id, nowEorzea);
+          const nextJson = get_fish_next_window(
+            id,
+            nowEorzea,
+            FILTER_INTUITION,
+          );
           const next = JSON.parse(nextJson);
           _nextWindowCache.set(id, next);
           return next;
@@ -1207,6 +1212,19 @@
             }),
           );
 
+          let windowFishId = formData.fishId;
+          if (
+            isAlwaysUp(fishInfo) &&
+            fishInfo.moochPath?.length &&
+            fishInfo.baitId != null
+          ) {
+            const moochFishInfo = JSON.parse(await get_fish(fishInfo.baitId));
+            if (queryGeneration !== _queryGeneration) return;
+            if (!isAlwaysUp(moochFishInfo)) {
+              windowFishId = moochFishInfo.id;
+            }
+          }
+
           const alwaysUp =
             isAlwaysUp(fishInfo) &&
             !fishInfo.intuitionRequirements?.length &&
@@ -1225,11 +1243,12 @@
 
           const windowsJson = await withTimeout(
             get_fish_windows_in_schedule(
-              formData.fishId,
+              windowFishId,
               nowEorzea,
               JSON.stringify(formData.schedule),
               timeperiodSecs,
               timezoneName,
+              FILTER_INTUITION,
             ),
             10000,
           );
@@ -1862,7 +1881,9 @@
         const nowUnix = Math.floor(Date.now() / 1000);
         const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
         let nextStr = "";
-        if (isAlwaysUp(f)) {
+        const hasConditionalAvailability =
+          f.intuitionRequirements?.length || f.moochPath?.length;
+        if (isAlwaysUp(f) && !hasConditionalAvailability) {
           nextStr = '<span class="fish-next-window">always up</span>';
         } else {
           const next = getNextFishWindow(f.id, nowUnix, nowEorzea);

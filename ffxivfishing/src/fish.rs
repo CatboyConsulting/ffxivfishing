@@ -328,7 +328,9 @@ impl Fish {
                 return Some(window);
             }
             if let Some(window) = self.intuition_window(&window, intuition_lookback_minutes) {
-                return Some(window);
+                if window.end() > time {
+                    return Some(window);
+                }
             }
 
             // Rejected candidates still consume search space. Advancing by at
@@ -392,13 +394,6 @@ impl Fish {
             {
                 last_prerequisite = Some(prerequisite_window);
             }
-        }
-
-        // Always-up fish are filtered for prerequisite availability, but keep
-        // their full-day window. Their actual intuition window can begin
-        // after the prerequisites are caught during that day.
-        if always_available {
-            return Some(window.clone());
         }
 
         let last_prerequisite = last_prerequisite?;

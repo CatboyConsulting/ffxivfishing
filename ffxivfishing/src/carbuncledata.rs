@@ -359,7 +359,10 @@ mod tests {
 
     use std::time::SystemTime;
 
-    use crate::{eorzea_time::EorzeaTime, fish::DEFAULT_INTUITION_LOOKBACK_MINUTES};
+    use crate::{
+        eorzea_time::{EORZEA_SUN, EorzeaTime},
+        fish::DEFAULT_INTUITION_LOOKBACK_MINUTES,
+    };
 
     use super::*;
     #[test]
@@ -460,7 +463,8 @@ mod tests {
                 10_000,
             )
             .unwrap();
-        assert_eq!(first.start(), EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap());
+        assert_eq!(first.start(), EorzeaTime::new(1, 1, 2, 8, 0, 0).unwrap());
+        assert_eq!(first.end(), EorzeaTime::new(1, 1, 2, 17, 0, 0).unwrap());
 
         let mut current = EorzeaTime::now();
 
@@ -474,7 +478,7 @@ mod tests {
                     10_000,
                 )
                 .expect("missing Warden window");
-            assert_eq!(window.duration(), EorzeaDuration::from_esecs(86_400));
+            assert!(window.duration().total_seconds() < EORZEA_SUN.total_seconds());
             current = window.end();
         }
     }

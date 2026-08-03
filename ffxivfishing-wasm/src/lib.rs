@@ -278,7 +278,11 @@ pub fn get_fish(fish_id: u32) -> Result<String, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn get_fish_next_window(fish_id: u32, timestamp_esec: u64) -> Result<String, JsValue> {
+pub fn get_fish_next_window(
+    fish_id: u32,
+    timestamp_esec: u64,
+    filter_intuition: bool,
+) -> Result<String, JsValue> {
     with_fish_data(|fd| {
         let fish = fd
             .fish_by_id(fish_id)
@@ -288,7 +292,7 @@ pub fn get_fish_next_window(fish_id: u32, timestamp_esec: u64) -> Result<String,
         let window = fish.next_window(
             eorzea_time,
             false,
-            false,
+            filter_intuition,
             DEFAULT_INTUITION_LOOKBACK_MINUTES,
             max_lookahead,
         );
@@ -307,7 +311,12 @@ pub fn get_fish_next_window(fish_id: u32, timestamp_esec: u64) -> Result<String,
 }
 
 #[wasm_bindgen]
-pub fn get_fish_windows(fish_id: u32, timestamp_esec: u64, limit: u32) -> Result<String, JsValue> {
+pub fn get_fish_windows(
+    fish_id: u32,
+    timestamp_esec: u64,
+    limit: u32,
+    filter_intuition: bool,
+) -> Result<String, JsValue> {
     with_fish_data(|fd| {
         let fish = fd
             .fish_by_id(fish_id)
@@ -320,7 +329,7 @@ pub fn get_fish_windows(fish_id: u32, timestamp_esec: u64, limit: u32) -> Result
             if let Some(window) = fish.next_window(
                 current_time,
                 false,
-                false,
+                filter_intuition,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 remaining,
             ) {
@@ -348,6 +357,7 @@ pub fn get_fish_windows_in_schedule(
     schedule_json: &str,
     timeperiod_secs: u64,
     timezone_name: &str,
+    filter_intuition: bool,
 ) -> Result<String, JsValue> {
     let local_schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {}", e)))?;
@@ -370,7 +380,7 @@ pub fn get_fish_windows_in_schedule(
         while let Some(fw) = fish.next_window(
             current_et,
             false,
-            false,
+            filter_intuition,
             DEFAULT_INTUITION_LOOKBACK_MINUTES,
             max_lookahead,
         ) {
