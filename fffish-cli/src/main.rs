@@ -205,13 +205,17 @@ impl App {
                             EorzeaTime::now(),
                             true,
                             false,
+                            false,
                             DEFAULT_INTUITION_LOOKBACK_MINUTES,
                             1_000,
                         )?;
                         Some(FishListItem {
                             name: f.name().to_string(),
                             id: f.id,
-                            bait: f.bait_id().and_then(|id| self.fish_data.item_by_id(id)).cloned(),
+                            bait: f
+                                .bait_id()
+                                .and_then(|id| self.fish_data.item_by_id(id))
+                                .cloned(),
                             next_window,
                             favourite: self.is_favourite(f.id),
                             caught: self.is_caught(f.id),

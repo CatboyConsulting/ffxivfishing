@@ -39,6 +39,8 @@ struct FishInfo {
     snagging: bool,
     lure: Option<String>,
     lure_proc: bool,
+    fish_eyes: bool,
+    big_fish: bool,
     window_start: String,
     window_end: String,
     previous_weather_set: Vec<String>,
@@ -164,6 +166,8 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
         snagging: fish.snagging,
         lure,
         lure_proc: fish.lure_proc,
+        fish_eyes: fish.fish_eyes,
+        big_fish: fish.big_fish,
         window_start: fish.window_start.to_string(),
         window_end: fish.window_end.to_string(),
         previous_weather_set: fish
@@ -282,6 +286,7 @@ pub fn get_fish_next_window(
     fish_id: u32,
     timestamp_esec: u64,
     filter_intuition: bool,
+    use_fish_eyes: bool,
 ) -> Result<String, JsValue> {
     with_fish_data(|fd| {
         let fish = fd
@@ -291,8 +296,9 @@ pub fn get_fish_next_window(
         let max_lookahead = 10000u32;
         let window = fish.next_window(
             eorzea_time,
-            false,
+            true,
             filter_intuition,
+            use_fish_eyes,
             DEFAULT_INTUITION_LOOKBACK_MINUTES,
             max_lookahead,
         );
@@ -316,6 +322,8 @@ pub fn get_fish_windows(
     timestamp_esec: u64,
     limit: u32,
     filter_intuition: bool,
+    use_fish_eyes: bool,
+    include_ongoing: bool,
 ) -> Result<String, JsValue> {
     with_fish_data(|fd| {
         let fish = fd
@@ -325,11 +333,13 @@ pub fn get_fish_windows(
         let mut windows: Vec<FishWindow> = Vec::new();
         let mut current_time = eorzea_time;
         let mut remaining = limit;
+        let mut include_current_ongoing = include_ongoing;
         while remaining > 0 {
             if let Some(window) = fish.next_window(
                 current_time,
-                false,
+                include_current_ongoing,
                 filter_intuition,
+                use_fish_eyes,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 remaining,
             ) {
@@ -341,6 +351,7 @@ pub fn get_fish_windows(
                     duration_esec: window.duration().total_seconds(),
                 });
                 current_time = window.end();
+                include_current_ongoing = false;
                 remaining -= 1;
             } else {
                 break;
@@ -358,6 +369,8 @@ pub fn get_fish_windows_in_schedule(
     timeperiod_secs: u64,
     timezone_name: &str,
     filter_intuition: bool,
+    use_fish_eyes: bool,
+    include_ongoing: bool,
 ) -> Result<String, JsValue> {
     let local_schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {}", e)))?;
@@ -376,11 +389,13 @@ pub fn get_fish_windows_in_schedule(
         let mut windows: Vec<FishWindow> = Vec::new();
         let mut current_et = now_et;
         let max_lookahead = 10000u32;
+        let mut include_current_ongoing = include_ongoing;
 
         while let Some(fw) = fish.next_window(
             current_et,
-            false,
+            include_current_ongoing,
             filter_intuition,
+            use_fish_eyes,
             DEFAULT_INTUITION_LOOKBACK_MINUTES,
             max_lookahead,
         ) {
@@ -404,6 +419,7 @@ pub fn get_fish_windows_in_schedule(
             }
 
             current_et = fw.end();
+            include_current_ongoing = false;
         }
 
         serde_json::to_string(&windows).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -681,6 +697,8 @@ mod tests {
             ])
         );
         assert_eq!(warden_json["intuitionLengthSeconds"], 175);
+        assert_eq!(warden_json["fishEyes"], false);
+        assert_eq!(warden_json["bigFish"], true);
         assert_eq!(warden_json["bait"], "Stonefly Larva");
         assert_eq!(warden_json["moochPath"], serde_json::json!([]));
         assert!(warden_json["lure"].is_null());
@@ -693,6 +711,10 @@ mod tests {
             mooching_json["moochPath"],
             serde_json::json!(["Merlthor Goby"])
         );
+
+        let big_fish = data.fish_by_id(7678).unwrap();
+        let big_fish_json = serde_json::to_value(fish_to_info(big_fish, &data)).unwrap();
+        assert_eq!(big_fish_json["bigFish"], true);
 
         let shonisaurus = data.fish_by_id(8772).unwrap();
         let shonisaurus_json = serde_json::to_value(fish_to_info(shonisaurus, &data)).unwrap();

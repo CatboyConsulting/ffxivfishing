@@ -158,8 +158,43 @@ impl FishWindowDefinition {
                     true => window.end(),
                     false => window.start(),
                 };
-                if start <= min_window && window.duration().total_seconds() > 0 {
-                    return Some(window);
+                let valid = if include_ongoing {
+                    start < min_window
+                } else {
+                    start <= min_window
+                };
+                if valid && window.duration().total_seconds() > 0 {
+                    let mut merged = window;
+                    let mut next_time = merged.end();
+                    let mut remaining = limit.saturating_sub(1);
+                    while remaining > 0 {
+                        let next_weather = match self.location.region.weather.find_pattern(
+                            next_time,
+                            &self.previous_weather_set,
+                            &self.weather_set,
+                            remaining,
+                        ) {
+                            Some(next_weather) => next_weather,
+                            None => break,
+                        };
+                        let next_weather_span =
+                            EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
+                        let next_window =
+                            match self.window_on_day(next_time).overlap(&next_weather_span) {
+                                Ok(next_window) => next_window,
+                                Err(_) => break,
+                            };
+                        if next_window.start() != merged.end()
+                            || next_window.duration().total_seconds() == 0
+                        {
+                            break;
+                        }
+                        merged = EorzeaTimeSpan::new_start_end(merged.start(), next_window.end())
+                            .ok()?;
+                        next_time = merged.end();
+                        remaining -= 1;
+                    }
+                    return Some(merged);
                 }
             }
             time += EORZEA_WEATHER_PERIOD;
@@ -265,6 +300,7 @@ pub struct Fish {
     pub gig: bool,
     pub folklore: bool,
     pub fish_eyes: bool,
+    pub big_fish: bool,
     pub patch: (u8, u8),
 }
 
@@ -291,6 +327,7 @@ impl Fish {
         gig: bool,
         folklore: bool,
         fish_eyes: bool,
+        big_fish: bool,
         patch: (u8, u8),
     ) -> Fish {
         Self {
@@ -311,12 +348,13 @@ impl Fish {
             gig,
             folklore,
             fish_eyes,
+            big_fish,
             patch,
         }
     }
 
     pub fn window_on_day(&self, etime: EorzeaTime) -> EorzeaTimeSpan {
-        self.window_definition().window_on_day(etime)
+        self.window_definition(false).window_on_day(etime)
     }
 
     pub fn next_window(
@@ -324,14 +362,17 @@ impl Fish {
         start: EorzeaTime,
         include_ongoing: bool,
         filter_intuition: bool,
+        use_fish_eyes: bool,
         intuition_lookback_minutes: u64,
         mut limit: u32,
     ) -> Option<EorzeaTimeSpan> {
-        let definition = self.window_definition();
+        let definition = self.window_definition(use_fish_eyes);
         let mut time = start;
         while limit > 0 {
             let include_target_ongoing = include_ongoing
-                || (filter_intuition && self.intuition.is_some() && self.is_always_available());
+                || (filter_intuition
+                    && self.intuition.is_some()
+                    && (self.is_always_available() || (use_fish_eyes && self.fish_eyes)));
             let window = definition.next_window(time, include_target_ongoing, limit)?;
             if !filter_intuition {
                 return Some(window);
@@ -357,11 +398,20 @@ impl Fish {
         None
     }
 
-    fn window_definition(&self) -> FishWindowDefinition {
+    fn window_definition(&self, use_fish_eyes: bool) -> FishWindowDefinition {
+        let ignore_time = use_fish_eyes && self.fish_eyes;
         FishWindowDefinition {
             location: Rc::clone(&self.location),
-            window_start: self.window_start,
-            window_end: self.window_end,
+            window_start: if ignore_time {
+                EorzeaDuration::from_esecs(0)
+            } else {
+                self.window_start
+            },
+            window_end: if ignore_time {
+                EorzeaDuration::from_esecs(0)
+            } else {
+                self.window_end
+            },
             previous_weather_set: self.previous_weather_set.clone(),
             weather_set: self.weather_set.clone(),
         }
@@ -541,7 +591,7 @@ impl FishData {
     ) -> FishData {
         let definitions: HashMap<u32, FishWindowDefinition> = fishes
             .iter()
-            .map(|fish| (fish.id, fish.window_definition()))
+            .map(|fish| (fish.id, fish.window_definition(false)))
             .collect();
         for fish in &mut fishes {
             if let Some(intuition) = &mut fish.intuition {
@@ -635,6 +685,7 @@ mod tests {
             gig: false,
             folklore: false,
             fish_eyes: false,
+            big_fish: false,
             patch: (7, 0),
             lure: Lure::Modest,
             lure_proc: false,
@@ -644,12 +695,72 @@ mod tests {
                 EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap(),
                 false,
                 false,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 1000,
             )
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 3, 1, 0, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 2, 0, 0).unwrap());
+    }
+
+    #[test]
+    pub fn next_window_includes_ongoing_window() {
+        let location = Rc::new(FishingHole::new(
+            0,
+            "Fishing Hole".to_string(),
+            Rc::new(Region::new(
+                "Region".to_string(),
+                WeatherForecast::new("Region".to_string(), vec![]),
+            )),
+        ));
+        let fish = Fish::new(
+            0,
+            "".to_string(),
+            location,
+            EorzeaDuration::new(1, 0, 0).unwrap(),
+            EorzeaDuration::new(2, 0, 0).unwrap(),
+            Bait::Unknown,
+            vec![],
+            vec![],
+            Tug::Unknown,
+            Hookset::Unknown,
+            None,
+            Lure::Modest,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            (1, 0),
+        );
+        let now = EorzeaTime::new(1, 1, 1, 1, 30, 0).unwrap();
+
+        let ongoing = fish
+            .next_window(
+                now,
+                true,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(ongoing.start(), EorzeaTime::new(1, 1, 1, 1, 0, 0).unwrap());
+        assert_eq!(ongoing.end(), EorzeaTime::new(1, 1, 1, 2, 0, 0).unwrap());
+
+        let upcoming = fish
+            .next_window(
+                now,
+                false,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(upcoming.start(), EorzeaTime::new(1, 1, 2, 1, 0, 0).unwrap());
     }
 
     #[test]
@@ -681,6 +792,7 @@ mod tests {
             gig: false,
             folklore: false,
             fish_eyes: false,
+            big_fish: false,
             patch: (7, 0),
             intuition: None,
             lure: Lure::Modest,
@@ -691,12 +803,59 @@ mod tests {
                 EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap(),
                 false,
                 false,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 1000,
             )
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 3, 7, 30, 0).unwrap());
-        assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 8, 0, 0).unwrap());
+        assert_eq!(result.end(), EorzeaTime::new(1, 1, 3, 8, 30, 0).unwrap());
+    }
+
+    #[test]
+    pub fn next_window_merges_contiguous_weather_periods() {
+        let location = Rc::new(FishingHole::new(
+            0,
+            "Fishing Hole".to_string(),
+            Rc::new(Region::new(
+                "Region".to_string(),
+                WeatherForecast::new("Region".to_string(), vec![(100, Weather::Clouds)]),
+            )),
+        ));
+        let fish = Fish::new(
+            0,
+            "".to_string(),
+            location,
+            EorzeaDuration::new(12, 0, 0).unwrap(),
+            EorzeaDuration::new(20, 0, 0).unwrap(),
+            Bait::Unknown,
+            vec![],
+            vec![Weather::Clouds],
+            Tug::Unknown,
+            Hookset::Unknown,
+            None,
+            Lure::Modest,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            (1, 0),
+        );
+
+        let window = fish
+            .next_window(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                false,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(window.start(), EorzeaTime::new(1, 1, 1, 12, 0, 0).unwrap());
+        assert_eq!(window.end(), EorzeaTime::new(1, 1, 1, 20, 0, 0).unwrap());
     }
 
     #[test]
@@ -728,6 +887,7 @@ mod tests {
             gig: false,
             folklore: false,
             fish_eyes: false,
+            big_fish: false,
             patch: (7, 0),
             intuition: None,
             lure: Lure::Modest,
@@ -738,12 +898,142 @@ mod tests {
                 EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap(),
                 false,
                 false,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 1_000,
             )
             .unwrap();
         assert_eq!(result.start(), EorzeaTime::new(1, 1, 4, 23, 30, 0).unwrap());
         assert_eq!(result.end(), EorzeaTime::new(1, 1, 5, 0, 0, 0).unwrap());
+    }
+
+    #[test]
+    pub fn fish_eyes_ignores_supported_fish_time_window() {
+        let location = Rc::new(FishingHole::new(
+            0,
+            "Fishing Hole".to_string(),
+            Rc::new(Region::new(
+                "Region".to_string(),
+                WeatherForecast::new("Region".to_string(), vec![(100, Weather::Sunny)]),
+            )),
+        ));
+        let make_fish = |fish_eyes| {
+            Fish::new(
+                0,
+                "".to_string(),
+                Rc::clone(&location),
+                EorzeaDuration::new(1, 0, 0).unwrap(),
+                EorzeaDuration::new(2, 0, 0).unwrap(),
+                Bait::Unknown,
+                vec![],
+                vec![],
+                Tug::Unknown,
+                Hookset::Unknown,
+                None,
+                Lure::Modest,
+                false,
+                false,
+                false,
+                false,
+                fish_eyes,
+                false,
+                (1, 0),
+            )
+        };
+        let start = EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap();
+
+        let disabled = make_fish(true)
+            .next_window(
+                start,
+                true,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(disabled.start(), EorzeaTime::new(1, 1, 3, 1, 0, 0).unwrap());
+        assert_eq!(disabled.end(), EorzeaTime::new(1, 1, 3, 2, 0, 0).unwrap());
+
+        let unsupported = make_fish(false)
+            .next_window(
+                start,
+                true,
+                false,
+                true,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(
+            unsupported.start(),
+            EorzeaTime::new(1, 1, 3, 1, 0, 0).unwrap()
+        );
+        assert_eq!(
+            unsupported.end(),
+            EorzeaTime::new(1, 1, 3, 2, 0, 0).unwrap()
+        );
+
+        let supported = make_fish(true)
+            .next_window(
+                start,
+                true,
+                false,
+                true,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert_eq!(
+            supported.start(),
+            EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap()
+        );
+        assert_eq!(supported.end(), EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap());
+    }
+
+    #[test]
+    pub fn fish_eyes_preserves_weather_restriction() {
+        let location = Rc::new(FishingHole::new(
+            0,
+            "Fishing Hole".to_string(),
+            Rc::new(Region::new(
+                "Region".to_string(),
+                WeatherForecast::new("Region".to_string(), vec![(100, Weather::Sunny)]),
+            )),
+        ));
+        let fish = Fish::new(
+            0,
+            "".to_string(),
+            location,
+            EorzeaDuration::new(1, 0, 0).unwrap(),
+            EorzeaDuration::new(2, 0, 0).unwrap(),
+            Bait::Unknown,
+            vec![],
+            vec![Weather::Clouds],
+            Tug::Unknown,
+            Hookset::Unknown,
+            None,
+            Lure::Modest,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            (1, 0),
+        );
+
+        assert!(
+            fish.next_window(
+                EorzeaTime::new(1, 1, 2, 2, 0, 0).unwrap(),
+                true,
+                false,
+                true,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                1000,
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -773,6 +1063,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 (1, 0),
             )
         };
@@ -796,6 +1087,7 @@ mod tests {
                 EorzeaTime::from_esecs(0),
                 false,
                 true,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 100,
             )
@@ -805,7 +1097,7 @@ mod tests {
         assert_eq!(window.end(), EorzeaTime::new(1, 1, 1, 4, 0, 0).unwrap());
         assert!(
             target
-                .next_window(EorzeaTime::from_esecs(0), false, true, 1, 100)
+                .next_window(EorzeaTime::from_esecs(0), false, true, false, 1, 100)
                 .is_none()
         );
     }

@@ -83,7 +83,7 @@ struct CarbuncleFish {
     #[serde(rename = "fishEyes")]
     fish_eyes: bool,
     #[serde(rename = "bigFish")]
-    bg_fish: bool,
+    big_fish: bool,
     #[serde(rename = "snagging")]
     snagging: Option<bool>,
     #[serde(rename = "patch")]
@@ -238,6 +238,7 @@ impl CarbuncleFish {
             false,
             false,
             self.fish_eyes,
+            self.big_fish,
             (
                 ((self.patch * 100.0).round() as u16 / 100) as u8,
                 ((self.patch * 100.0).round() as u16 % 100) as u8,
@@ -433,6 +434,7 @@ mod tests {
                 EorzeaTime::from_time(&SystemTime::now()).unwrap(),
                 false,
                 false,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 1_000,
             );
@@ -462,6 +464,7 @@ mod tests {
                 EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
                 false,
                 true,
+                false,
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
                 10_000,
             )
@@ -477,6 +480,7 @@ mod tests {
                     current,
                     false,
                     true,
+                    false,
                     DEFAULT_INTUITION_LOOKBACK_MINUTES,
                     10_000,
                 )
@@ -484,6 +488,38 @@ mod tests {
             assert!(window.duration().total_seconds() < EORZEA_SUN.total_seconds());
             current = window.end();
         }
+    }
+
+    #[test]
+    fn cinder_surprise_finds_windows_after_the_first_one() {
+        let data = carbuncle_fishes().unwrap();
+        let fish = data.fish_by_id(33241).unwrap();
+        let first = fish
+            .next_window(
+                EorzeaTime::new(1108, 8, 15, 0, 0, 0).unwrap(),
+                true,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .unwrap();
+        assert_eq!(
+            first.start(),
+            EorzeaTime::new(1108, 8, 15, 0, 0, 0).unwrap()
+        );
+
+        let next = fish
+            .next_window(
+                first.end(),
+                true,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .expect("missing Cinder Surprise window after the first one");
+        assert!(next.start() > first.end());
     }
 
     #[test]
