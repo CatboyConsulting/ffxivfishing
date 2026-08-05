@@ -595,11 +595,24 @@ impl FishData {
             .collect();
         for fish in &mut fishes {
             if let Some(intuition) = &mut fish.intuition {
+                let location = Rc::clone(&fish.location);
                 intuition.resolved_requirements = Some(
                     intuition
                         .requirements
                         .iter()
-                        .map(|(count, id)| (*count, definitions.get(id).cloned()))
+                        .map(|(count, id)| {
+                            let definition = definitions.get(id).cloned().unwrap_or_else(|| {
+                                // Intuition fish missing from the data are treated as always up.
+                                FishWindowDefinition {
+                                    location: Rc::clone(&location),
+                                    window_start: EorzeaDuration::from_esecs(0),
+                                    window_end: EorzeaDuration::from_esecs(0),
+                                    previous_weather_set: vec![],
+                                    weather_set: vec![],
+                                }
+                            });
+                            (*count, Some(definition))
+                        })
                         .collect(),
                 );
             }
@@ -1100,5 +1113,54 @@ mod tests {
                 .next_window(EorzeaTime::from_esecs(0), false, true, false, 1, 100)
                 .is_none()
         );
+    }
+
+    #[test]
+    pub fn missing_intuition_prerequisite_is_always_available() {
+        let location = Rc::new(FishingHole::new(
+            0,
+            "Fishing Hole".to_string(),
+            Rc::new(Region::new(
+                "Region".to_string(),
+                WeatherForecast::new("Region".to_string(), vec![(100, Weather::Sunny)]),
+            )),
+        ));
+        let target = Fish::new(
+            1,
+            "Target".to_string(),
+            location,
+            EorzeaDuration::new(3, 0, 0).unwrap(),
+            EorzeaDuration::new(6, 0, 0).unwrap(),
+            Bait::Unknown,
+            vec![],
+            vec![],
+            Tug::Unknown,
+            Hookset::Unknown,
+            Some(Intuition::new(Duration::from_secs(350), vec![(1, 2)])),
+            Lure::Modest,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            (1, 0),
+        );
+        let data = FishData::new(vec![target], vec![], vec![], vec![], HashMap::new());
+        let target = data.fish_by_id(1).unwrap();
+
+        let window = target
+            .next_window(
+                EorzeaTime::from_esecs(0),
+                false,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+
+        assert_eq!(window.start(), EorzeaTime::new(1, 1, 1, 3, 0, 0).unwrap());
+        assert_eq!(window.end(), EorzeaTime::new(1, 1, 1, 6, 0, 0).unwrap());
     }
 }
