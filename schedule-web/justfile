@@ -2,7 +2,7 @@ build:
     wasm-pack build ../ffxivfishing-wasm --target web --out-dir pkg
 
 dist: build
-    mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html favicon.ico dist/
+    mkdir -p dist && cp -r ../ffxivfishing-wasm/pkg index.html styles.css app.js favicon.ico manifest.webmanifest service-worker.js icon-192.png icon-512.png dist/
     sed -i "s/__BUILD_NUMBER__/$(date +%Y%m%d)/g" dist/index.html
 
 deploy: dist
@@ -10,5 +10,5 @@ deploy: dist
     wrangler pages deploy dist --project-name ffxivfishing
 
 deploy-no-build:
-    mkdir -p dist && cp -r pkg index.html dist/
+    mkdir -p dist && cp -r pkg index.html styles.css app.js favicon.ico manifest.webmanifest service-worker.js icon-192.png icon-512.png dist/
     wrangler pages deploy dist --project-name ffxivfishing
