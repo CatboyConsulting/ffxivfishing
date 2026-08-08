@@ -351,6 +351,19 @@ td {
   cursor: pointer;
 }
 
+.notification-toggle input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.notification-browser {
+  margin-bottom: 0.5rem;
+}
+
+.notification-browser .notification-status {
+  margin: 0.15rem 0 0 1.375rem;
+}
+
 .notification-options {
   display: flex;
   flex-direction: column;

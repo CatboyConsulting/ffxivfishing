@@ -58,21 +58,27 @@
             </label>
           </fieldset>
 
-          <fieldset id="notification-settings" class="config-fieldset notification-settings hidden" aria-hidden="true">
-            <legend>Window Notifications</legend>
-            <label class="notification-toggle" for="enable-notifications">
-              <input type="checkbox" id="enable-notifications" />
-              <span>Enable notification before a window</span>
-            </label>
-            <div class="notification-options">
-              <label class="config-input-label" for="notification-minutes">
-                <span>Minutes before the window</span>
-                <input type="number" id="notification-minutes" min="1" max="1440" value="15" inputmode="numeric" />
+          <fieldset id="notification-settings" class="config-fieldset notification-settings">
+            <legend>Window Notifications &amp; Export</legend>
+            <div class="notification-browser">
+              <label class="notification-toggle" for="enable-notifications">
+                <input type="checkbox" id="enable-notifications" />
+                <span>Enable browser notification before a window</span>
               </label>
               <p id="notification-status" class="notification-status" role="status" aria-live="polite">
                 Notifications are off.
               </p>
+              <div class="notification-options">
+                <label class="config-input-label" for="notification-minutes">
+                  <span>Minutes before the window</span>
+                  <input type="number" id="notification-minutes" min="1" max="1440" value="15" inputmode="numeric" />
+                </label>
+              </div>
             </div>
+            <label class="notification-toggle" for="export-ics-alarm">
+              <input type="checkbox" id="export-ics-alarm" checked />
+              <span>Add alarm field to .ics export</span>
+            </label>
           </fieldset>
 
           <fieldset class="config-fieldset">

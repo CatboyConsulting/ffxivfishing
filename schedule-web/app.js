@@ -468,19 +468,35 @@ function fmtIcsDate(unixSecs) {
   return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
-function icsVevent(w, fishName) {
+function icsVevent(w, fishName, alarmMinutes) {
   const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
   const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
   const uid = `${windowKey(w)}@ffxivfishing`;
-  return [
+  const displayName = escapeIcsText((fishName || "Fish") + " Window");
+  const lines = [
     "BEGIN:VEVENT",
     "UID:" + uid,
     "DTSTAMP:" + fmtIcsDate(Math.floor(Date.now() / 1000)),
     "DTSTART:" + fmtIcsDate(startUnix),
     "DTEND:" + fmtIcsDate(endUnix),
-    "SUMMARY:" + escapeIcsText((fishName || "Fish") + " Window"),
-    "END:VEVENT",
+    "SUMMARY:" + displayName,
   ];
+  if (alarmMinutes != null) {
+    lines.push(
+      "BEGIN:VALARM",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:" + displayName,
+      "TRIGGER:-PT" + alarmMinutes + "M",
+      "END:VALARM",
+    );
+  }
+  lines.push("END:VEVENT");
+  return lines;
+}
+
+function getIcsAlarmMinutes() {
+  const settings = getNotificationSettings();
+  return settings?.exportAlarm ? settings.minutesBefore : null;
 }
 
 function escapeIcsText(value) {
@@ -523,7 +539,7 @@ function kebab(s) {
 function downloadIcs() {
   if (_lastWindows.length === 0) return;
   downloadIcsCalendar(
-    _lastWindows.map((w) => icsVevent(w, _lastFishName)),
+    _lastWindows.map((w) => icsVevent(w, _lastFishName, getIcsAlarmMinutes())),
     "fish-schedule-" + kebab(_lastFishName) + ".ics",
     "//fish-schedule-tool//EN",
   );
@@ -533,7 +549,7 @@ function downloadSingleIcs(idx) {
   const w = _lastWindows[idx];
   if (!w) return;
   downloadIcsCalendar(
-    [icsVevent(w, _lastFishName)],
+    [icsVevent(w, _lastFishName, getIcsAlarmMinutes())],
     "window-" + (idx + 1) + "-" + kebab(_lastFishName) + ".ics",
   );
 }
@@ -667,6 +683,7 @@ function getNotificationSettings() {
   const minutes = Number(settings?.minutesBefore);
   return {
     enabled: settings?.enabled === true,
+    exportAlarm: settings?.exportAlarm !== false,
     minutesBefore: Number.isFinite(minutes)
       ? Math.max(1, Math.min(Math.round(minutes), MAX_NOTIFICATION_MINUTES))
       : DEFAULT_NOTIFICATION_MINUTES,
@@ -712,17 +729,17 @@ function updateNotificationInputState() {
   const checkbox = document.getElementById("enable-notifications");
   const minutes = document.getElementById("notification-minutes");
   if (!checkbox || !minutes) return;
-  minutes.disabled = !checkbox.checked;
+  minutes.disabled = !checkbox.checked || !supportsNotifications();
 }
 
 function initializeNotificationControls() {
   const settingsPanel = document.getElementById("notification-settings");
   const checkbox = document.getElementById("enable-notifications");
   const minutes = document.getElementById("notification-minutes");
-  if (!settingsPanel || !checkbox || !minutes) return;
+  const icsAlarm = document.getElementById("export-ics-alarm");
+  if (!settingsPanel || !checkbox || !minutes || !icsAlarm) return;
 
   updateNotificationAvailability();
-  if (!canConfigureNotifications()) return;
 
   const settings = getNotificationSettings();
   if (
@@ -734,6 +751,7 @@ function initializeNotificationControls() {
   }
   checkbox.checked = settings.enabled;
   minutes.value = settings.minutesBefore;
+  icsAlarm.checked = settings.exportAlarm;
   updateNotificationInputState();
   renderNotificationStatus();
 }
@@ -912,12 +930,19 @@ function updateNotificationMinutes() {
 }
 
 function updateNotificationAvailability() {
-  const settingsPanel = document.getElementById("notification-settings");
-  if (!settingsPanel) return;
-  const available = canConfigureNotifications();
-  settingsPanel.classList.toggle("hidden", !available);
-  settingsPanel.setAttribute("aria-hidden", String(!available));
-  if (!available) clearNotificationTimer();
+  const checkbox = document.getElementById("enable-notifications");
+  if (!checkbox) return;
+  const supported = supportsNotifications();
+  checkbox.disabled = !supported;
+  if (!supported) clearNotificationTimer();
+}
+
+function handleIcsAlarmToggle() {
+  const checkbox = document.getElementById("export-ics-alarm");
+  if (!checkbox) return;
+  const settings = getNotificationSettings();
+  settings.exportAlarm = checkbox.checked;
+  saveNotificationSettings(settings);
 }
 
 function windowKey(w) {
@@ -959,7 +984,7 @@ function downloadSavedIcs() {
   const saved = getSavedWindows();
   if (saved.length === 0) return;
   downloadIcsCalendar(
-    saved.map((w) => icsVevent(w, w.fishName)),
+    saved.map((w) => icsVevent(w, w.fishName, getIcsAlarmMinutes())),
     "saved-windows.ics",
     "//saved-windows//EN",
   );
@@ -967,7 +992,7 @@ function downloadSavedIcs() {
 
 function downloadSavedIcsItem(w) {
   downloadIcsCalendar(
-    [icsVevent(w, w.fishName)],
+    [icsVevent(w, w.fishName, getIcsAlarmMinutes())],
     "window-" + kebab(w.fishName) + ".ics",
   );
 }
@@ -1534,6 +1559,9 @@ document
 document
   .getElementById("notification-minutes")
   .addEventListener("change", updateNotificationMinutes);
+document
+  .getElementById("export-ics-alarm")
+  .addEventListener("change", handleIcsAlarmToggle);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     updateNotificationAvailability();
