@@ -102,6 +102,8 @@ struct FishWindowDefinition {
     location: Rc<FishingHole>,
     window_start: EorzeaDuration,
     window_end: EorzeaDuration,
+    fish_eyes: bool,
+    collectable: bool,
     previous_weather_set: Vec<Weather>,
     weather_set: Vec<Weather>,
 }
@@ -203,16 +205,30 @@ impl FishWindowDefinition {
         None
     }
 
-    fn last_window_in(&self, start: EorzeaTime, end: EorzeaTime) -> Option<EorzeaTimeSpan> {
+    fn last_window_in(
+        &self,
+        start: EorzeaTime,
+        end: EorzeaTime,
+        use_fish_eyes: bool,
+    ) -> Option<EorzeaTimeSpan> {
         if start >= end {
             return None;
         }
 
+        let definition = if use_fish_eyes && self.fish_eyes {
+            Self {
+                window_start: EorzeaDuration::from_esecs(0),
+                window_end: EorzeaDuration::from_esecs(0),
+                ..self.clone()
+            }
+        } else {
+            self.clone()
+        };
         let mut time = start;
         let mut limit = INTUITION_SEARCH_LIMIT;
         let mut last_window = None;
         while limit > 0 {
-            let window = match self.next_window(time, true, limit) {
+            let window = match definition.next_window(time, true, limit) {
                 Some(window) => window,
                 None => return last_window,
             };
@@ -301,10 +317,44 @@ pub struct Fish {
     pub folklore: bool,
     pub fish_eyes: bool,
     pub big_fish: bool,
+    pub collectable: bool,
     pub patch: (u8, u8),
 }
 
+#[derive(Debug, Clone)]
+pub struct FishWindow {
+    span: EorzeaTimeSpan,
+    fish_eyes: bool,
+}
+
+impl FishWindow {
+    fn new(span: EorzeaTimeSpan, fish_eyes: bool) -> Self {
+        Self { span, fish_eyes }
+    }
+
+    pub fn start(&self) -> EorzeaTime {
+        self.span.start()
+    }
+
+    pub fn end(&self) -> EorzeaTime {
+        self.span.end()
+    }
+
+    pub fn duration(&self) -> EorzeaDuration {
+        self.span.duration()
+    }
+
+    pub fn uses_fish_eyes(&self) -> bool {
+        self.fish_eyes
+    }
+
+    pub fn as_time_span(&self) -> &EorzeaTimeSpan {
+        &self.span
+    }
+}
+
 pub const DEFAULT_INTUITION_LOOKBACK_MINUTES: u64 = 30;
+pub const DEFAULT_WINDOW_SEARCH_LIMIT: u32 = 10_000;
 const INTUITION_SEARCH_LIMIT: u32 = 10_000;
 
 impl Fish {
@@ -349,6 +399,7 @@ impl Fish {
             folklore,
             fish_eyes,
             big_fish,
+            collectable: false,
             patch,
         }
     }
@@ -364,8 +415,28 @@ impl Fish {
         filter_intuition: bool,
         use_fish_eyes: bool,
         intuition_lookback_minutes: u64,
-        mut limit: u32,
+        limit: u32,
     ) -> Option<EorzeaTimeSpan> {
+        self.next_window_with_fish_eyes(
+            start,
+            include_ongoing,
+            filter_intuition,
+            use_fish_eyes,
+            intuition_lookback_minutes,
+            limit,
+        )
+        .map(|window| window.span)
+    }
+
+    pub fn next_window_with_fish_eyes(
+        &self,
+        start: EorzeaTime,
+        include_ongoing: bool,
+        filter_intuition: bool,
+        use_fish_eyes: bool,
+        intuition_lookback_minutes: u64,
+        mut limit: u32,
+    ) -> Option<FishWindow> {
         let definition = self.window_definition(use_fish_eyes);
         let mut time = start;
         while limit > 0 {
@@ -375,12 +446,17 @@ impl Fish {
                     && (self.is_always_available() || (use_fish_eyes && self.fish_eyes)));
             let window = definition.next_window(time, include_target_ongoing, limit)?;
             if !filter_intuition {
-                return Some(window);
+                let uses_fish_eyes = use_fish_eyes
+                    && self.fish_eyes
+                    && !self.is_always_available()
+                    && !self.natural_window_contains(&window);
+                return Some(FishWindow::new(window, uses_fish_eyes));
             }
-            if let Some(window) = self.intuition_window(&window, intuition_lookback_minutes) {
-                if window.end() > time {
-                    return Some(window);
+            match self.intuition_window(&window, intuition_lookback_minutes, use_fish_eyes) {
+                Some((window, uses_fish_eyes)) if window.end() > time => {
+                    return Some(FishWindow::new(window, uses_fish_eyes));
                 }
+                _ => (),
             }
 
             // Rejected candidates still consume search space. Advancing by at
@@ -398,6 +474,63 @@ impl Fish {
         None
     }
 
+    pub fn next_windows(
+        &self,
+        start: EorzeaTime,
+        limit: u32,
+        filter_intuition: bool,
+        use_fish_eyes: bool,
+        include_ongoing: bool,
+        intuition_lookback_minutes: u64,
+    ) -> Vec<EorzeaTimeSpan> {
+        self.next_windows_with_fish_eyes(
+            start,
+            limit,
+            filter_intuition,
+            use_fish_eyes,
+            include_ongoing,
+            intuition_lookback_minutes,
+        )
+        .into_iter()
+        .map(|window| window.span)
+        .collect()
+    }
+
+    pub fn next_windows_with_fish_eyes(
+        &self,
+        start: EorzeaTime,
+        limit: u32,
+        filter_intuition: bool,
+        use_fish_eyes: bool,
+        include_ongoing: bool,
+        intuition_lookback_minutes: u64,
+    ) -> Vec<FishWindow> {
+        let mut windows = Vec::new();
+        let mut current_time = start;
+        let mut remaining = limit;
+        let mut include_current_ongoing = include_ongoing;
+
+        while remaining > 0 {
+            let window = match self.next_window_with_fish_eyes(
+                current_time,
+                include_current_ongoing,
+                filter_intuition,
+                use_fish_eyes,
+                intuition_lookback_minutes,
+                remaining,
+            ) {
+                Some(window) => window,
+                None => break,
+            };
+            current_time = window.end();
+            include_current_ongoing = false;
+            remaining -= 1;
+            windows.push(window);
+        }
+
+        windows
+    }
+
     fn window_definition(&self, use_fish_eyes: bool) -> FishWindowDefinition {
         let ignore_time = use_fish_eyes && self.fish_eyes;
         FishWindowDefinition {
@@ -412,6 +545,8 @@ impl Fish {
             } else {
                 self.window_end
             },
+            fish_eyes: self.fish_eyes,
+            collectable: self.collectable,
             previous_weather_set: self.previous_weather_set.clone(),
             weather_set: self.weather_set.clone(),
         }
@@ -421,6 +556,30 @@ impl Fish {
         &self,
         window: &EorzeaTimeSpan,
         intuition_lookback_minutes: u64,
+        use_fish_eyes: bool,
+    ) -> Option<(EorzeaTimeSpan, bool)> {
+        let window =
+            self.calculate_intuition_window(window, intuition_lookback_minutes, use_fish_eyes)?;
+        let target_requires_fish_eyes = use_fish_eyes
+            && self.fish_eyes
+            && !self.is_always_available()
+            && !self.natural_window_contains(&window);
+        let prerequisite_requires_fish_eyes = use_fish_eyes
+            && self
+                .calculate_intuition_window(&window, intuition_lookback_minutes, false)
+                .is_none_or(|without_fish_eyes| without_fish_eyes != window);
+
+        Some((
+            window,
+            target_requires_fish_eyes || prerequisite_requires_fish_eyes,
+        ))
+    }
+
+    fn calculate_intuition_window(
+        &self,
+        window: &EorzeaTimeSpan,
+        intuition_lookback_minutes: u64,
+        use_fish_eyes: bool,
     ) -> Option<EorzeaTimeSpan> {
         let intuition = match &self.intuition {
             Some(intuition) => intuition,
@@ -430,9 +589,10 @@ impl Fish {
             Some(length) => length,
             None => return Some(window.clone()),
         };
-        let requirements = match &intuition.resolved_requirements {
-            Some(requirements) => requirements,
-            None => return None,
+        let requirements = if let Some(requirements) = &intuition.resolved_requirements {
+            requirements
+        } else {
+            return None;
         };
 
         let lookback_esecs = ((intuition_lookback_minutes as u128 * 60 * 3_600 + 87) / 175)
@@ -445,7 +605,10 @@ impl Fish {
         for (_, prerequisite) in requirements {
             let prerequisite = prerequisite.as_ref()?;
             let prerequisite_window =
-                prerequisite.last_window_in(preparation_start, preparation_end)?;
+                prerequisite.last_window_in(preparation_start, preparation_end, use_fish_eyes)?;
+            if prerequisite.collectable {
+                continue;
+            }
             if last_prerequisite
                 .as_ref()
                 .is_none_or(|last: &EorzeaTimeSpan| prerequisite_window.end() > last.end())
@@ -454,16 +617,37 @@ impl Fish {
             }
         }
 
-        let last_prerequisite = last_prerequisite?;
+        let last_prerequisite = match last_prerequisite {
+            Some(last_prerequisite) => last_prerequisite,
+            None => return Some(window.clone()),
+        };
         let intuition_end = last_prerequisite.end() + intuition_length;
         let start = std::cmp::max(window.start(), last_prerequisite.start());
         let end = std::cmp::min(window.end(), intuition_end);
         EorzeaTimeSpan::new_start_end(start, end).ok()
     }
 
+    fn natural_window_contains(&self, window: &EorzeaTimeSpan) -> bool {
+        let definition = self.window_definition(false);
+        let mut day = window.start();
+        day.round(EORZEA_SUN);
+        for offset in [-1i8, 0, 1] {
+            let candidate_day = match offset {
+                -1 => day - EORZEA_SUN,
+                0 => day,
+                1 => day + EORZEA_SUN,
+                _ => unreachable!(),
+            };
+            if definition.window_on_day(candidate_day).start() <= window.start()
+                && definition.window_on_day(candidate_day).end() >= window.end()
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     fn is_always_available(&self) -> bool {
-        // Fish::new normalizes endHour 24 to zero, so a full-day window is
-        // represented by equal zero-valued start and end durations.
         self.window_start == EorzeaDuration::from_esecs(0)
             && self.window_end == EorzeaDuration::from_esecs(0)
     }
@@ -607,6 +791,8 @@ impl FishData {
                                     location: Rc::clone(&location),
                                     window_start: EorzeaDuration::from_esecs(0),
                                     window_end: EorzeaDuration::from_esecs(0),
+                                    fish_eyes: false,
+                                    collectable: false,
                                     previous_weather_set: vec![],
                                     weather_set: vec![],
                                 }
@@ -699,6 +885,7 @@ mod tests {
             folklore: false,
             fish_eyes: false,
             big_fish: false,
+            collectable: false,
             patch: (7, 0),
             lure: Lure::Modest,
             lure_proc: false,
@@ -806,6 +993,7 @@ mod tests {
             folklore: false,
             fish_eyes: false,
             big_fish: false,
+            collectable: false,
             patch: (7, 0),
             intuition: None,
             lure: Lure::Modest,
@@ -901,6 +1089,7 @@ mod tests {
             folklore: false,
             fish_eyes: false,
             big_fish: false,
+            collectable: false,
             patch: (7, 0),
             intuition: None,
             lure: Lure::Modest,
@@ -1113,6 +1302,89 @@ mod tests {
                 .next_window(EorzeaTime::from_esecs(0), false, true, false, 1, 100)
                 .is_none()
         );
+    }
+
+    #[test]
+    pub fn aquamaton_has_more_windows_with_fish_eyes() {
+        let data = crate::carbuncledata::carbuncle_fishes().unwrap();
+        let aquamaton = data.fish_by_id(33240).unwrap();
+
+        let without_fish_eyes = aquamaton.next_windows(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            false,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+        let with_fish_eyes = aquamaton.next_windows(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            true,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+
+        assert!(
+            with_fish_eyes.len() > without_fish_eyes.len(),
+            "Fish Eyes should add Aquamaton windows: {} with vs {} without",
+            with_fish_eyes.len(),
+            without_fish_eyes.len()
+        );
+
+        let without_fish_eyes_tagged = aquamaton.next_windows_with_fish_eyes(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            false,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+        let with_fish_eyes_tagged = aquamaton.next_windows_with_fish_eyes(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            true,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+        assert!(
+            without_fish_eyes_tagged
+                .iter()
+                .all(|window| !window.uses_fish_eyes())
+        );
+        assert!(
+            with_fish_eyes_tagged
+                .iter()
+                .any(|window| window.uses_fish_eyes())
+        );
+    }
+
+    #[test]
+    pub fn stethacanthus_uses_collectable_fish_eyes_prerequisite() {
+        let data = crate::carbuncledata::carbuncle_fishes().unwrap();
+        let stethacanthus = data.fish_by_id(24992).unwrap();
+
+        let without_fish_eyes = stethacanthus.next_windows(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            false,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+        let with_fish_eyes = stethacanthus.next_windows_with_fish_eyes(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            true,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+
+        assert!(with_fish_eyes.len() > without_fish_eyes.len());
+        assert!(with_fish_eyes.iter().any(|window| window.uses_fish_eyes()));
     }
 
     #[test]

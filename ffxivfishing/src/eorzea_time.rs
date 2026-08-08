@@ -100,6 +100,12 @@ impl EorzeaTime {
         })
     }
 
+    pub fn from_unix_secs(unix_secs: u64) -> EorzeaTime {
+        EorzeaTime {
+            timestamp: ((unix_secs as f64) * EORZEA_TIME_CONST).round() as u64,
+        }
+    }
+
     pub fn from_esecs(secs: u64) -> EorzeaTime {
         EorzeaTime { timestamp: secs }
     }
@@ -111,6 +117,13 @@ impl EorzeaTime {
     pub fn to_system_time(&self) -> SystemTime {
         SystemTime::UNIX_EPOCH
             + Duration::from_secs((self.timestamp as f64 / EORZEA_TIME_CONST).round() as u64)
+    }
+
+    pub fn unix_secs(&self) -> u64 {
+        self.to_system_time()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 
     pub fn round(&mut self, d: EorzeaDuration) {
@@ -366,6 +379,18 @@ mod tests {
                 .unwrap(),
             EorzeaTime::new(1, 1, 21, 13, 42, 51).unwrap()
         );
+    }
+
+    #[test]
+    pub fn unix_seconds_conversion() {
+        let unix_secs = 24 * 60 * 60;
+        let eorzea_time = EorzeaTime::from_unix_secs(unix_secs);
+
+        assert_eq!(
+            eorzea_time,
+            EorzeaTime::from_time(&(UNIX_EPOCH + Duration::from_secs(unix_secs))).unwrap()
+        );
+        assert_eq!(eorzea_time.unix_secs(), unix_secs);
     }
 
     #[test]

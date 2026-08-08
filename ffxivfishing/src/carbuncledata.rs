@@ -72,6 +72,8 @@ struct CarbuncleFish {
     location: Option<u32>,
     #[serde(rename = "intuitionLength")]
     intuition_length: Option<u32>,
+    #[serde(rename = "collectable")]
+    collectable: Option<u32>,
     #[serde(rename = "predators")]
     predators: Vec<[u32; 2]>,
     #[serde(rename = "tug")]
@@ -213,7 +215,7 @@ impl CarbuncleFish {
                 .unwrap_or(Bait::Unknown),
             (None, _) => Bait::Unknown,
         };
-        Some(Fish::new(
+        let mut fish = Fish::new(
             self.id,
             item.name.clone(),
             Rc::clone(fish_hole),
@@ -243,7 +245,9 @@ impl CarbuncleFish {
                 ((self.patch * 100.0).round() as u16 / 100) as u8,
                 ((self.patch * 100.0).round() as u16 % 100) as u8,
             ),
-        ))
+        );
+        fish.collectable = self.collectable.is_some();
+        Some(fish)
     }
 }
 
