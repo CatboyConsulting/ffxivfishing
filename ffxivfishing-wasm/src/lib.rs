@@ -60,6 +60,27 @@ struct FishWindow {
     end_display: String,
     duration_esec: u64,
     fish_eyes: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    intuition: Option<IntuitionWindowInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IntuitionWindowInfo {
+    prerequisite_windows: Vec<IntuitionWindowSetupInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IntuitionWindowSetupInfo {
+    amount: u8,
+    fish_id: u32,
+    fish: String,
+    fish_eyes: bool,
+    start_esec: u64,
+    end_esec: u64,
+    start_display: String,
+    end_display: String,
 }
 
 #[derive(Serialize)]
@@ -179,7 +200,28 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     }
 }
 
-fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow) -> FishWindow {
+fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, fd: &FishData) -> FishWindow {
+    let item_name = |id: u32| {
+        fd.item_by_id(id)
+            .map(|item| item.name().to_string())
+            .unwrap_or_else(|| format!("Unknown item ({id})"))
+    };
+    let intuition = window.intuition().map(|intuition| IntuitionWindowInfo {
+        prerequisite_windows: intuition
+            .prerequisite_windows()
+            .iter()
+            .map(|setup| IntuitionWindowSetupInfo {
+                amount: setup.amount(),
+                fish_id: setup.fish(),
+                fish: item_name(setup.fish()),
+                fish_eyes: setup.uses_fish_eyes(),
+                start_esec: setup.window().start().as_esecs(),
+                end_esec: setup.window().end().as_esecs(),
+                start_display: setup.window().start().to_string(),
+                end_display: setup.window().end().to_string(),
+            })
+            .collect(),
+    });
     FishWindow {
         start_esec: window.start().as_esecs(),
         end_esec: window.end().as_esecs(),
@@ -187,6 +229,7 @@ fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow) -> FishWindow {
         end_display: window.end().to_string(),
         duration_esec: window.duration().total_seconds(),
         fish_eyes: window.uses_fish_eyes(),
+        intuition,
     }
 }
 
@@ -243,7 +286,7 @@ pub fn get_fish_next_window(
             max_lookahead,
         );
         match window {
-            Some(fw) => serde_json::to_string(&Some(fish_window_to_info(&fw))),
+            Some(fw) => serde_json::to_string(&Some(fish_window_to_info(&fw, fd))),
             None => serde_json::to_string::<Option<FishWindow>>(&None),
         }
         .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -274,7 +317,7 @@ pub fn get_fish_windows(
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
             )
             .into_iter()
-            .map(|window| fish_window_to_info(&window))
+            .map(|window| fish_window_to_info(&window, fd))
             .collect();
         serde_json::to_string(&windows).map_err(|e| JsValue::from_str(&e.to_string()))
     })
@@ -286,6 +329,7 @@ pub fn get_fish_windows_in_schedule(
     timestamp_esec: u64,
     schedule_json: &str,
     timeperiod_secs: u64,
+    limit: u32,
     timezone_name: &str,
     filter_intuition: bool,
     use_fish_eyes: bool,
@@ -307,13 +351,14 @@ pub fn get_fish_windows_in_schedule(
             now_et,
             &local_schedule,
             timeperiod_secs,
+            limit,
             tz,
             filter_intuition,
             use_fish_eyes,
             include_ongoing,
         )
         .into_iter()
-        .map(|window| fish_window_to_info(&window))
+        .map(|window| fish_window_to_info(&window, fd))
         .collect();
 
         serde_json::to_string(&windows).map_err(|e| JsValue::from_str(&e.to_string()))
@@ -459,7 +504,7 @@ mod tests {
     }
 
     #[test]
-    fn fish_window_includes_fish_eyes_tag() {
+    fn intuition_window_includes_fish_eyes_tags() {
         let data = carbuncledata::carbuncle_fishes().unwrap();
         let aquamaton = data.fish_by_id(33240).unwrap();
         let window = aquamaton
@@ -472,10 +517,94 @@ mod tests {
                 DEFAULT_INTUITION_LOOKBACK_MINUTES,
             )
             .into_iter()
-            .find(|window| window.uses_fish_eyes())
-            .expect("Aquamaton should have a Fish Eyes-only window");
-        let json = serde_json::to_value(fish_window_to_info(&window)).unwrap();
+            .find(|window| {
+                window.intuition().is_some_and(|intuition| {
+                    intuition
+                        .prerequisite_windows()
+                        .iter()
+                        .any(|setup| setup.uses_fish_eyes())
+                })
+            })
+            .expect("Aquamaton should have a Fish Eyes prerequisite window");
+        let json = serde_json::to_value(fish_window_to_info(&window, &data)).unwrap();
 
-        assert_eq!(json["fishEyes"], true);
+        assert_eq!(json["fishEyes"], false);
+        assert!(
+            json["intuition"]["prerequisiteWindows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|setup| setup["fishEyes"] == true)
+        );
+    }
+
+    #[test]
+    fn intuition_window_includes_prerequisite_windows() {
+        let data = carbuncledata::carbuncle_fishes().unwrap();
+        let warden = data.fish_by_id(24994).unwrap();
+        let window = warden
+            .next_windows_with_fish_eyes(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                10,
+                true,
+                false,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            )
+            .into_iter()
+            .next()
+            .expect("Warden of the Seven Hues should have an intuition window");
+        let json = serde_json::to_value(fish_window_to_info(&window, &data)).unwrap();
+
+        assert_eq!(
+            json["intuition"]["prerequisiteWindows"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        assert_eq!(
+            json["intuition"]["prerequisiteWindows"][0]["fish"],
+            "Indigo Prismfish"
+        );
+        assert_eq!(json["intuition"]["prerequisiteWindows"][0]["amount"], 3);
+
+        let fish_eyes_window = warden
+            .next_windows_with_fish_eyes(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                10,
+                true,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            )
+            .into_iter()
+            .next()
+            .expect("Warden should have a Fish Eyes intuition window");
+        let fish_eyes_json =
+            serde_json::to_value(fish_window_to_info(&fish_eyes_window, &data)).unwrap();
+        assert_eq!(
+            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["startDisplay"],
+            "0001-01-02 00:00:00"
+        );
+        assert_eq!(
+            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["endDisplay"],
+            "0001-01-02 04:00:00"
+        );
+    }
+
+    #[test]
+    fn sidereal_whale_has_windows_with_fish_eyes_enabled() {
+        let data = carbuncledata::carbuncle_fishes().unwrap();
+        let whale = data.fish_by_id(41412).unwrap();
+        let windows = whale.next_windows_with_fish_eyes(
+            EorzeaTime::from_esecs(0),
+            100,
+            true,
+            true,
+            false,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        );
+        assert_eq!(windows.len(), 1);
     }
 }

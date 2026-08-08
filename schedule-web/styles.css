@@ -137,6 +137,52 @@ td {
   cursor: help;
 }
 
+.intuition-detail-row td {
+  padding: 0;
+  background: var(--bg-medium);
+}
+
+.intuition-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem 0.6rem 2rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.intuition-detail strong {
+  color: var(--text-accent);
+}
+
+.intuition-detail ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.intuition-detail li {
+  padding-left: 0.15rem;
+}
+
+.intuition-prerequisite-fish {
+  display: inline-block;
+  min-width: 14rem;
+  color: var(--text-primary);
+}
+
+.intuition-prerequisite-window {
+  display: inline;
+}
+
+.intuition-prerequisite-et,
+.intuition-prerequisite-local {
+  color: var(--text-muted);
+  margin-left: 0.4rem;
+}
+
 /* ---- saved windows ---- */
 .saved-windows-section {
   margin-bottom: 0.5rem;
@@ -173,7 +219,8 @@ td {
 
 #saved-windows-list .saved-item.past .fish-name,
 #saved-windows-list .saved-item.past .window-when,
-#saved-windows-list .saved-item.past .window-detail {
+#saved-windows-list .saved-item.past .window-detail,
+#saved-windows-list .saved-item.past .intuition-prerequisite-fish {
   color: var(--text-muted);
 }
 
@@ -228,6 +275,29 @@ td {
   color: var(--text-muted);
   font-size: 0.75rem;
   margin-top: 1px;
+}
+
+#saved-windows-list .saved-intuition-setup {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+#saved-windows-list .saved-intuition-setup strong {
+  color: var(--text-accent);
+}
+
+#saved-windows-list .saved-intuition-setup ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.2rem 0;
+  padding-left: 1.25rem;
+}
+
+#saved-windows-list .saved-intuition-setup li {
+  padding-left: 0.15rem;
 }
 
 #saved-windows-list .saved-item .remove-saved {
@@ -987,6 +1057,29 @@ footer {
 
   .saved-item .window-when {
     flex-shrink: 0;
+  }
+
+  .intuition-detail {
+    padding-left: 0.75rem;
+  }
+
+  .intuition-detail li {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .intuition-prerequisite-fish {
+    min-width: 0;
+  }
+
+  .intuition-prerequisite-et,
+  .intuition-prerequisite-local {
+    display: inline;
+    margin-left: 0;
+  }
+
+  .intuition-prerequisite-window {
+    display: block;
   }
 
   th:nth-child(5),

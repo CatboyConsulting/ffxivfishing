@@ -240,10 +240,7 @@ impl FishWindowDefinition {
             }
 
             let next_time = window.end();
-            if next_time <= time {
-                return last_window;
-            }
-            if next_time >= end {
+            if next_time <= time || next_time >= end {
                 return last_window;
             }
             time = next_time;
@@ -251,6 +248,87 @@ impl FishWindowDefinition {
         }
         last_window
     }
+
+    fn last_window_in_shared(&self, start: EorzeaTime, end: EorzeaTime) -> Option<EorzeaTimeSpan> {
+        if start >= end {
+            return None;
+        }
+
+        let mut last_window = None;
+        let mut time = start;
+        let mut limit = INTUITION_SEARCH_LIMIT;
+        if self.previous_weather_set.is_empty() && self.weather_set.is_empty() {
+            while limit > 0 {
+                let window = self.window_on_day(time);
+                if window.start() >= end {
+                    break;
+                }
+                if window.end() > start {
+                    last_window = Some(window);
+                }
+                time += EORZEA_SUN;
+                limit -= 1;
+            }
+        } else {
+            while limit > 0 {
+                let next_weather = self.location.region.weather.find_pattern(
+                    time,
+                    &self.previous_weather_set,
+                    &self.weather_set,
+                    limit,
+                )?;
+                if next_weather >= end {
+                    break;
+                }
+                let weather_span = EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
+                update_last_window(self, time, &weather_span, start, end, &mut last_window);
+                time = next_weather;
+                limit -= 1;
+            }
+        }
+        last_window
+    }
+
+    fn last_windows_in(
+        &self,
+        start: EorzeaTime,
+        end: EorzeaTime,
+        use_fish_eyes: bool,
+    ) -> PrerequisiteWindows {
+        let without_fish_eyes = self.last_window_in_shared(start, end);
+        let with_fish_eyes = if use_fish_eyes {
+            self.last_window_in(start, end, true)
+        } else {
+            without_fish_eyes.clone()
+        };
+        PrerequisiteWindows {
+            with_fish_eyes,
+            without_fish_eyes,
+        }
+    }
+}
+
+fn update_last_window(
+    definition: &FishWindowDefinition,
+    time: EorzeaTime,
+    weather_span: &EorzeaTimeSpan,
+    start: EorzeaTime,
+    end: EorzeaTime,
+    last_window: &mut Option<EorzeaTimeSpan>,
+) {
+    let Ok(window) = definition.window_on_day(time).overlap(weather_span) else {
+        return;
+    };
+    if window.start() >= end || window.end() <= start {
+        return;
+    }
+
+    *last_window = match last_window.take() {
+        Some(previous) if window.start() == previous.end() => {
+            EorzeaTimeSpan::new_start_end(previous.start(), window.end()).ok()
+        }
+        _ => Some(window),
+    };
 }
 
 #[derive(Debug)]
@@ -325,11 +403,16 @@ pub struct Fish {
 pub struct FishWindow {
     span: EorzeaTimeSpan,
     fish_eyes: bool,
+    intuition: Option<IntuitionWindow>,
 }
 
 impl FishWindow {
-    fn new(span: EorzeaTimeSpan, fish_eyes: bool) -> Self {
-        Self { span, fish_eyes }
+    fn new(span: EorzeaTimeSpan, fish_eyes: bool, intuition: Option<IntuitionWindow>) -> Self {
+        Self {
+            span,
+            fish_eyes,
+            intuition,
+        }
     }
 
     pub fn start(&self) -> EorzeaTime {
@@ -348,9 +431,166 @@ impl FishWindow {
         self.fish_eyes
     }
 
+    pub fn intuition(&self) -> Option<&IntuitionWindow> {
+        self.intuition.as_ref()
+    }
+
     pub fn as_time_span(&self) -> &EorzeaTimeSpan {
         &self.span
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct IntuitionWindow {
+    prerequisite_windows: Vec<IntuitionWindowSetup>,
+}
+
+impl IntuitionWindow {
+    pub fn prerequisite_windows(&self) -> &[IntuitionWindowSetup] {
+        &self.prerequisite_windows
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IntuitionWindowSetup {
+    amount: u8,
+    fish: u32,
+    window: EorzeaTimeSpan,
+    fish_eyes: bool,
+}
+
+impl IntuitionWindowSetup {
+    pub fn amount(&self) -> u8 {
+        self.amount
+    }
+
+    pub fn fish(&self) -> u32 {
+        self.fish
+    }
+
+    pub fn window(&self) -> &EorzeaTimeSpan {
+        &self.window
+    }
+
+    pub fn uses_fish_eyes(&self) -> bool {
+        self.fish_eyes
+    }
+}
+
+struct IntuitionPrerequisiteCalculation {
+    amount: u8,
+    fish: u32,
+    collectable: bool,
+    window: EorzeaTimeSpan,
+    without_fish_eyes: Option<EorzeaTimeSpan>,
+}
+
+struct PrerequisiteWindows {
+    with_fish_eyes: Option<EorzeaTimeSpan>,
+    without_fish_eyes: Option<EorzeaTimeSpan>,
+}
+
+fn intuition_window_for_prerequisites(
+    window: &EorzeaTimeSpan,
+    intuition_length: EorzeaDuration,
+    prerequisites: &[IntuitionPrerequisiteCalculation],
+    fish_eyes_disabled_for: Option<usize>,
+) -> Option<EorzeaTimeSpan> {
+    let mut last_prerequisite: Option<&EorzeaTimeSpan> = None;
+    for (index, prerequisite) in prerequisites.iter().enumerate() {
+        let prerequisite_window = if fish_eyes_disabled_for == Some(index) {
+            prerequisite.without_fish_eyes.as_ref()?
+        } else {
+            &prerequisite.window
+        };
+        if prerequisite.collectable {
+            continue;
+        }
+        if last_prerequisite.is_none_or(|last| prerequisite_window.end() > last.end()) {
+            last_prerequisite = Some(prerequisite_window);
+        }
+    }
+
+    let last_prerequisite = match last_prerequisite {
+        Some(last_prerequisite) => last_prerequisite,
+        None => return Some(window.clone()),
+    };
+    intuition_window_from_last_prerequisite(window, intuition_length, Some(last_prerequisite))
+}
+
+fn intuition_window_from_last_prerequisite(
+    window: &EorzeaTimeSpan,
+    intuition_length: EorzeaDuration,
+    last_prerequisite: Option<&EorzeaTimeSpan>,
+) -> Option<EorzeaTimeSpan> {
+    let Some(last_prerequisite) = last_prerequisite else {
+        return Some(window.clone());
+    };
+    let start = std::cmp::max(window.start(), last_prerequisite.start());
+    let end = std::cmp::min(window.end(), last_prerequisite.end() + intuition_length);
+    EorzeaTimeSpan::new_start_end(start, end).ok()
+}
+
+fn fish_eyes_required_for_prerequisites(
+    window: &EorzeaTimeSpan,
+    intuition_length: EorzeaDuration,
+    prerequisites: &[IntuitionPrerequisiteCalculation],
+    intuition_window: &EorzeaTimeSpan,
+    use_fish_eyes: bool,
+) -> Vec<bool> {
+    if !use_fish_eyes {
+        return vec![false; prerequisites.len()];
+    }
+
+    let mut latest = None;
+    let mut second_latest = None;
+    for (index, prerequisite) in prerequisites.iter().enumerate() {
+        if prerequisite.collectable {
+            continue;
+        }
+        if latest.is_none_or(|(_, last): (usize, &EorzeaTimeSpan)| {
+            prerequisite.window.end() > last.end()
+        }) {
+            second_latest = latest;
+            latest = Some((index, &prerequisite.window));
+        } else if second_latest.is_none_or(|(_, last): (usize, &EorzeaTimeSpan)| {
+            prerequisite.window.end() > last.end()
+        }) {
+            second_latest = Some((index, &prerequisite.window));
+        }
+    }
+
+    prerequisites
+        .iter()
+        .enumerate()
+        .map(|(index, prerequisite)| {
+            let Some(without_fish_eyes) = prerequisite.without_fish_eyes.as_ref() else {
+                return true;
+            };
+            if prerequisite.collectable {
+                return false;
+            }
+
+            let last_without_this = if latest.is_some_and(|(last_index, _)| last_index == index) {
+                second_latest
+            } else {
+                latest
+            };
+            let replacement = match last_without_this {
+                Some((_, last)) if last.end() > without_fish_eyes.end() => Some(last),
+                Some((last_index, last)) if last.end() == without_fish_eyes.end() => {
+                    if last_index < index {
+                        Some(last)
+                    } else {
+                        Some(without_fish_eyes)
+                    }
+                }
+                _ => Some(without_fish_eyes),
+            };
+            intuition_window_from_last_prerequisite(window, intuition_length, replacement)
+                != Some(intuition_window.clone())
+        })
+        .collect()
 }
 
 pub const DEFAULT_INTUITION_LOOKBACK_MINUTES: u64 = 30;
@@ -450,11 +690,11 @@ impl Fish {
                     && self.fish_eyes
                     && !self.is_always_available()
                     && !self.natural_window_contains(&window);
-                return Some(FishWindow::new(window, uses_fish_eyes));
+                return Some(FishWindow::new(window, uses_fish_eyes, None));
             }
             match self.intuition_window(&window, intuition_lookback_minutes, use_fish_eyes) {
-                Some((window, uses_fish_eyes)) if window.end() > time => {
-                    return Some(FishWindow::new(window, uses_fish_eyes));
+                Some((window, uses_fish_eyes, intuition)) if window.end() > time => {
+                    return Some(FishWindow::new(window, uses_fish_eyes, intuition));
                 }
                 _ => (),
             }
@@ -557,21 +797,19 @@ impl Fish {
         window: &EorzeaTimeSpan,
         intuition_lookback_minutes: u64,
         use_fish_eyes: bool,
-    ) -> Option<(EorzeaTimeSpan, bool)> {
-        let window =
+    ) -> Option<(EorzeaTimeSpan, bool, Option<IntuitionWindow>)> {
+        let (window, prerequisite_windows) =
             self.calculate_intuition_window(window, intuition_lookback_minutes, use_fish_eyes)?;
         let target_requires_fish_eyes = use_fish_eyes
             && self.fish_eyes
             && !self.is_always_available()
             && !self.natural_window_contains(&window);
-        let prerequisite_requires_fish_eyes = use_fish_eyes
-            && self
-                .calculate_intuition_window(&window, intuition_lookback_minutes, false)
-                .is_none_or(|without_fish_eyes| without_fish_eyes != window);
-
         Some((
             window,
-            target_requires_fish_eyes || prerequisite_requires_fish_eyes,
+            target_requires_fish_eyes,
+            (!prerequisite_windows.is_empty()).then_some(IntuitionWindow {
+                prerequisite_windows,
+            }),
         ))
     }
 
@@ -580,16 +818,16 @@ impl Fish {
         window: &EorzeaTimeSpan,
         intuition_lookback_minutes: u64,
         use_fish_eyes: bool,
-    ) -> Option<EorzeaTimeSpan> {
+    ) -> Option<(EorzeaTimeSpan, Vec<IntuitionWindowSetup>)> {
         let intuition = match &self.intuition {
             Some(intuition) => intuition,
-            None => return Some(window.clone()),
+            None => return Some((window.clone(), Vec::new())),
         };
         let intuition_length = match intuition.length_eorzea() {
             Some(length) => length,
-            None => return Some(window.clone()),
+            None => return Some((window.clone(), Vec::new())),
         };
-        let requirements = if let Some(requirements) = &intuition.resolved_requirements {
+        let resolved_requirements = if let Some(requirements) = &intuition.resolved_requirements {
             requirements
         } else {
             return None;
@@ -601,30 +839,61 @@ impl Fish {
         let preparation_start = window.start() - lookback;
         let preparation_end = window.end();
 
-        let mut last_prerequisite = None;
-        for (_, prerequisite) in requirements {
+        let mut prerequisite_calculations = Vec::new();
+        for ((amount, fish), (_, prerequisite)) in
+            intuition.requirements.iter().zip(resolved_requirements)
+        {
             let prerequisite = prerequisite.as_ref()?;
-            let prerequisite_window =
-                prerequisite.last_window_in(preparation_start, preparation_end, use_fish_eyes)?;
-            if prerequisite.collectable {
-                continue;
-            }
-            if last_prerequisite
-                .as_ref()
-                .is_none_or(|last: &EorzeaTimeSpan| prerequisite_window.end() > last.end())
-            {
-                last_prerequisite = Some(prerequisite_window);
-            }
+            let windows =
+                prerequisite.last_windows_in(preparation_start, preparation_end, use_fish_eyes);
+            let without_fish_eyes = windows.without_fish_eyes;
+            let prerequisite_window = if use_fish_eyes {
+                windows.with_fish_eyes?
+            } else {
+                without_fish_eyes.clone()?
+            };
+            prerequisite_calculations.push(IntuitionPrerequisiteCalculation {
+                amount: *amount,
+                fish: *fish,
+                collectable: prerequisite.collectable,
+                window: prerequisite_window,
+                without_fish_eyes,
+            });
         }
 
-        let last_prerequisite = match last_prerequisite {
-            Some(last_prerequisite) => last_prerequisite,
-            None => return Some(window.clone()),
-        };
-        let intuition_end = last_prerequisite.end() + intuition_length;
-        let start = std::cmp::max(window.start(), last_prerequisite.start());
-        let end = std::cmp::min(window.end(), intuition_end);
-        EorzeaTimeSpan::new_start_end(start, end).ok()
+        let intuition_window = intuition_window_for_prerequisites(
+            window,
+            intuition_length,
+            &prerequisite_calculations,
+            None,
+        )?;
+
+        let fish_eyes_required = fish_eyes_required_for_prerequisites(
+            window,
+            intuition_length,
+            &prerequisite_calculations,
+            &intuition_window,
+            use_fish_eyes,
+        );
+        let prerequisite_windows = prerequisite_calculations
+            .iter()
+            .zip(fish_eyes_required)
+            .map(|(prerequisite, fish_eyes)| IntuitionWindowSetup {
+                amount: prerequisite.amount,
+                fish: prerequisite.fish,
+                window: if fish_eyes {
+                    prerequisite.window.clone()
+                } else {
+                    prerequisite
+                        .without_fish_eyes
+                        .clone()
+                        .unwrap_or_else(|| prerequisite.window.clone())
+                },
+                fish_eyes,
+            })
+            .collect();
+
+        Some((intuition_window, prerequisite_windows))
     }
 
     fn natural_window_contains(&self, window: &EorzeaTimeSpan) -> bool {
@@ -1191,6 +1460,18 @@ mod tests {
             EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap()
         );
         assert_eq!(supported.end(), EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap());
+
+        let supported_tagged = make_fish(true)
+            .next_window_with_fish_eyes(
+                start,
+                true,
+                false,
+                true,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                100,
+            )
+            .unwrap();
+        assert!(supported_tagged.uses_fish_eyes());
     }
 
     #[test]
@@ -1285,7 +1566,7 @@ mod tests {
         );
         let target = data.fish_by_id(1).unwrap();
         let window = target
-            .next_window(
+            .next_window_with_fish_eyes(
                 EorzeaTime::from_esecs(0),
                 false,
                 true,
@@ -1297,6 +1578,22 @@ mod tests {
 
         assert_eq!(window.start(), EorzeaTime::new(1, 1, 1, 3, 0, 0).unwrap());
         assert_eq!(window.end(), EorzeaTime::new(1, 1, 1, 4, 0, 0).unwrap());
+        let setup = window
+            .intuition()
+            .unwrap()
+            .prerequisite_windows()
+            .first()
+            .unwrap();
+        assert_eq!(setup.amount(), 1);
+        assert_eq!(setup.fish(), 2);
+        assert_eq!(
+            setup.window().start(),
+            EorzeaTime::new(1, 1, 1, 1, 0, 0).unwrap()
+        );
+        assert_eq!(
+            setup.window().end(),
+            EorzeaTime::new(1, 1, 1, 2, 0, 0).unwrap()
+        );
         assert!(
             target
                 .next_window(EorzeaTime::from_esecs(0), false, true, false, 1, 100)
@@ -1354,11 +1651,14 @@ mod tests {
                 .iter()
                 .all(|window| !window.uses_fish_eyes())
         );
-        assert!(
-            with_fish_eyes_tagged
-                .iter()
-                .any(|window| window.uses_fish_eyes())
-        );
+        assert!(with_fish_eyes_tagged.iter().any(|window| {
+            window.intuition().is_some_and(|intuition| {
+                intuition
+                    .prerequisite_windows()
+                    .iter()
+                    .any(|setup| setup.uses_fish_eyes())
+            })
+        }));
     }
 
     #[test]
@@ -1384,7 +1684,14 @@ mod tests {
         );
 
         assert!(with_fish_eyes.len() > without_fish_eyes.len());
-        assert!(with_fish_eyes.iter().any(|window| window.uses_fish_eyes()));
+        assert!(with_fish_eyes.iter().any(|window| {
+            window.intuition().is_some_and(|intuition| {
+                intuition
+                    .prerequisite_windows()
+                    .iter()
+                    .any(|setup| setup.uses_fish_eyes())
+            })
+        }));
     }
 
     #[test]

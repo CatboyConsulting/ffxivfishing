@@ -25,6 +25,7 @@ pub fn fish_windows_in_schedule(
     timestamp: EorzeaTime,
     schedule: &[ScheduleEntry],
     timeperiod_secs: u64,
+    limit: u32,
     timezone: Tz,
     filter_intuition: bool,
     use_fish_eyes: bool,
@@ -36,14 +37,18 @@ pub fn fish_windows_in_schedule(
     let mut current = timestamp;
     let mut include_current_ongoing = include_ongoing;
 
-    while let Some(window) = fish.next_window_with_fish_eyes(
-        current,
-        include_current_ongoing,
-        filter_intuition,
-        use_fish_eyes,
-        DEFAULT_INTUITION_LOOKBACK_MINUTES,
-        DEFAULT_WINDOW_SEARCH_LIMIT,
-    ) {
+    while windows.len() < limit as usize {
+        let window = match fish.next_window_with_fish_eyes(
+            current,
+            include_current_ongoing,
+            filter_intuition,
+            use_fish_eyes,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            DEFAULT_WINDOW_SEARCH_LIMIT,
+        ) {
+            Some(window) => window,
+            None => break,
+        };
         let window_start = window.start().to_system_time();
         let window_end = window.end().to_system_time();
 

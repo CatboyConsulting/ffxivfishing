@@ -97,6 +97,13 @@ function formatRealDuration(seconds) {
   );
 }
 
+function formatLocalWindow(start, end) {
+  const startDate = start.toLocaleDateString();
+  const endDate = end.toLocaleDateString();
+  const endDatePrefix = startDate === endDate ? "" : `${endDate} `;
+  return `${startDate} ${start.toLocaleTimeString()} - ${endDatePrefix}${end.toLocaleTimeString()}`;
+}
+
 function fmtWhen(diffSec, endDiffSec) {
   if (endDiffSec !== undefined && endDiffSec <= 0)
     return { whenStr: "ended", state: "past" };
@@ -325,6 +332,7 @@ async function query(formData, trigger) {
     const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
     const timeperiodSecs = BigInt(formData.days * 86400);
     const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const limit = formData.limit || 100;
 
     elStatus.textContent = `Searching the next ${formData.days} day(s) for windows...`;
     // yield so the status message paints before the blocking wasm call
@@ -391,6 +399,7 @@ async function query(formData, trigger) {
         nowEorzea,
         JSON.stringify(formData.schedule),
         timeperiodSecs,
+        limit,
         timezoneName,
         FILTER_INTUITION,
         formData.useFishEyes === true,
@@ -400,8 +409,6 @@ async function query(formData, trigger) {
     );
     if (queryGeneration !== _queryGeneration) return;
     const windows = JSON.parse(windowsJson);
-    const limit = formData.limit || 100;
-    if (windows.length > limit) windows.length = limit;
     _lastWindows = windows;
 
     elStatus.textContent = `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""} in the next ${formData.days} day(s).`;
@@ -436,6 +443,7 @@ async function query(formData, trigger) {
         ...w,
         fishId: _selectedFishId,
         fishName: _lastFishName,
+        intuitionLengthSeconds: fishInfo.intuitionLengthSeconds,
       };
       const wSaved = isWindowSaved(wMeta);
       if (wSaved) savedCount++;
@@ -451,6 +459,22 @@ async function query(formData, trigger) {
   </td>
 `;
       elTbody.appendChild(row);
+
+      const intuitionInfo = intuitionInfoHtml(
+        w,
+        "intuition-detail",
+        fishInfo.intuitionLengthSeconds,
+      );
+      if (intuitionInfo) {
+        const detailRow = document.createElement("tr");
+        detailRow.className = "intuition-detail-row";
+        detailRow.innerHTML = `
+          <td colspan="6">
+            ${intuitionInfo}
+          </td>
+        `;
+        elTbody.appendChild(detailRow);
+      }
     }
 
     elStatus.textContent =
@@ -997,6 +1021,52 @@ function downloadSavedIcsItem(w) {
   );
 }
 
+function intuitionInfoHtml(w, containerClass, intuitionLengthSeconds) {
+  const prerequisiteWindows = w.intuition?.prerequisiteWindows;
+  if (!prerequisiteWindows?.length) return "";
+  const intuitionLength = formatRealDuration(intuitionLengthSeconds);
+  const title = `Intuition${intuitionLength ? ` (${intuitionLength})` : ""}`;
+
+  const prerequisiteLines = prerequisiteWindows
+    .map((prerequisite) => {
+      const prerequisiteStartUnix = Number(
+        unix_from_eorzea_time(BigInt(prerequisite.startEsec)),
+      );
+      const prerequisiteEndUnix = Number(
+        unix_from_eorzea_time(BigInt(prerequisite.endEsec)),
+      );
+      const prerequisiteStart = new Date(prerequisiteStartUnix * 1000);
+      const prerequisiteEnd = new Date(prerequisiteEndUnix * 1000);
+      const fishName = prerequisite.fish || `Fish #${prerequisite.fishId}`;
+      const eorzeaStart = eoTime(prerequisite.startDisplay);
+      const eorzeaEnd = eoTime(prerequisite.endDisplay);
+      const alwaysUp = eorzeaStart === "00:00" && eorzeaEnd === "00:00";
+      const localWindow = alwaysUp
+        ? "always up"
+        : formatLocalWindow(prerequisiteStart, prerequisiteEnd);
+      const eorzeaWindow = alwaysUp
+        ? "always up"
+        : `${eorzeaStart} - ${eorzeaEnd}`;
+      const timeWindow = alwaysUp
+        ? `<span class="intuition-prerequisite-local">${localWindow}</span>`
+        : `<span class="intuition-prerequisite-et">ET ${escapeHtml(eorzeaWindow)}</span>
+          <span class="intuition-prerequisite-separator"> | </span>
+          <span class="intuition-prerequisite-local">${escapeHtml(localWindow)}</span>`;
+      return `
+        <li>
+          <span class="intuition-prerequisite-fish">${escapeHtml(`${prerequisite.amount} ${fishName}`)}${fishEyesIndicator(prerequisite)}</span>
+          <span class="intuition-prerequisite-window">${timeWindow}</span>
+        </li>`;
+    })
+    .join("");
+
+  return `
+    <div class="${containerClass}">
+      <strong>${escapeHtml(title)}</strong>
+      <ol>${prerequisiteLines}</ol>
+    </div>`;
+}
+
 function renderSavedWindows() {
   const saved = getSavedWindows().sort((a, b) => {
     const aSec = BigInt(a.startEsec);
@@ -1057,6 +1127,12 @@ function renderSavedWindows() {
           </span>
         </div>
         <span class="window-detail">${escapeHtml(startDay)} | ${escapeHtml(dateStr)} ${escapeHtml(timeStr)} | ET ${escapeHtml(eoStr)}</span>
+        ${intuitionInfoHtml(
+          w,
+          "saved-intuition-setup",
+          w.intuitionLengthSeconds ??
+          _allFishInfo.find((fish) => fish.id === w.fishId)?.intuitionLengthSeconds,
+        )}
       </div>
     `;
     const savedFish = div.querySelector(".fish-name");
@@ -1529,6 +1605,7 @@ async function main() {
     try {
       const raw = await list_all_fish_info();
       _allFishInfo = JSON.parse(raw);
+      renderSavedWindows();
     } catch { }
     renderFishList();
     startFishListTimer();
