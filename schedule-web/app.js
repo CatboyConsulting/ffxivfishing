@@ -1,10 +1,8 @@
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./service-worker.js")
-      .catch(() => {
-        // The app remains usable when service workers are unavailable.
-      });
+    navigator.serviceWorker.register("./service-worker.js").catch(() => {
+      // The app remains usable when service workers are unavailable.
+    });
   });
 }
 
@@ -19,14 +17,14 @@ import init, {
 } from "./pkg/ffxivfishing_wasm.js";
 
 const DAY_OPTIONS = [
-  {value: "", label: "Any"},
-  {value: "1", label: "Mon"},
-  {value: "2", label: "Tue"},
-  {value: "3", label: "Wed"},
-  {value: "4", label: "Thu"},
-  {value: "5", label: "Fri"},
-  {value: "6", label: "Sat"},
-  {value: "0", label: "Sun"},
+  { value: "", label: "Any" },
+  { value: "1", label: "Mon" },
+  { value: "2", label: "Tue" },
+  { value: "3", label: "Wed" },
+  { value: "4", label: "Thu" },
+  { value: "5", label: "Fri" },
+  { value: "6", label: "Sat" },
+  { value: "0", label: "Sun" },
 ];
 const FILTER_INTUITION = true;
 
@@ -50,6 +48,12 @@ function escapeHtml(value) {
     };
     return entities[char];
   });
+}
+
+function fishEyesIndicator(fishWindow) {
+  return fishWindow?.fishEyes === true
+    ? '<span class="fish-eyes-indicator" role="img" aria-label="Only available with Fish Eyes" title="Only available with Fish Eyes">&#128065;</span>'
+    : "";
 }
 
 function daySelectHtml(selected) {
@@ -95,31 +99,26 @@ function formatRealDuration(seconds) {
 
 function fmtWhen(diffSec, endDiffSec) {
   if (endDiffSec !== undefined && endDiffSec <= 0)
-    return {whenStr: "ended", state: "past"};
-  if (diffSec <= 0) return {whenStr: "now", state: "ongoing"};
+    return { whenStr: "ended", state: "past" };
+  if (diffSec <= 0) return { whenStr: "now", state: "ongoing" };
   let whenStr;
   if (diffSec < 60) whenStr = "<1m";
   else if (diffSec < 3600) whenStr = `${Math.floor(diffSec / 60)}m`;
   else if (diffSec < 86400) whenStr = `${Math.floor(diffSec / 3600)}h`;
   else whenStr = `${Math.floor(diffSec / 86400)}d`;
-  return {whenStr, state: "future"};
+  return { whenStr, state: "future" };
 }
 
 function fmtSavedWhen(startUnix, endUnix, nowUnix) {
-  const {whenStr, state} = fmtWhen(
-    startUnix - nowUnix,
-    endUnix - nowUnix,
-  );
+  const { whenStr, state } = fmtWhen(startUnix - nowUnix, endUnix - nowUnix);
   if (state === "future" && startUnix - nowUnix < 60) {
-    return {displayWhen: `in ${startUnix - nowUnix}s`, state};
+    return { displayWhen: `in ${startUnix - nowUnix}s`, state };
   }
   if (state === "ongoing") {
     const remaining = endUnix - nowUnix;
     const remainingStr =
-      remaining < 60
-        ? `${remaining}s`
-        : `${Math.floor(remaining / 60)}m`;
-    return {displayWhen: `ending in ${remainingStr}`, state};
+      remaining < 60 ? `${remaining}s` : `${Math.floor(remaining / 60)}m`;
+    return { displayWhen: `ending in ${remainingStr}`, state };
   }
   return {
     displayWhen: state === "future" ? "in " + whenStr : whenStr,
@@ -144,8 +143,7 @@ function getNextFishWindow(id, nowUnix, nowEorzea) {
     document.getElementById("use-fish-eyes")?.checked,
   );
   const cacheKey = `${id}:${useFishEyes}`;
-  if (_nextWindowCache.has(cacheKey))
-    return _nextWindowCache.get(cacheKey);
+  if (_nextWindowCache.has(cacheKey)) return _nextWindowCache.get(cacheKey);
   try {
     const nextJson = get_fish_next_window(
       id,
@@ -202,8 +200,7 @@ function restoreSearch() {
       Number.isFinite(p.days) &&
       (p.limit === undefined ||
         (typeof p.limit === "number" && Number.isFinite(p.limit))) &&
-      (p.useFishEyes === undefined ||
-        typeof p.useFishEyes === "boolean")
+      (p.useFishEyes === undefined || typeof p.useFishEyes === "boolean")
     ) {
       return p;
     }
@@ -218,7 +215,7 @@ function getFormData() {
   }
   return {
     fishId: 0,
-    schedule: [{startSec: 0, endSec: 86400}],
+    schedule: [{ startSec: 0, endSec: 86400 }],
     days: 30,
     limit: 100,
     useFishEyes: false,
@@ -264,9 +261,7 @@ function populateForm(formData) {
 }
 
 function readSchedule() {
-  const rows = document.querySelectorAll(
-    "#schedule-rows .schedule-row",
-  );
+  const rows = document.querySelectorAll("#schedule-rows .schedule-row");
   const result = [];
   for (const row of rows) {
     const selects = row.querySelectorAll("select");
@@ -275,7 +270,7 @@ function readSchedule() {
     const startSec = timeToSecs(inputs[0].value);
     const endSec = timeToSecs(inputs[1].value);
     if (isNaN(startSec) || isNaN(endSec)) continue;
-    const entry = {startSec, endSec};
+    const entry = { startSec, endSec };
     if (dayVal !== "") {
       entry.dayOfWeek = parseInt(dayVal, 10);
     }
@@ -307,10 +302,7 @@ function withTimeout(promise, milliseconds) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
     timeoutId = setTimeout(
-      () =>
-        reject(
-          new Error(`Search timed out after ${milliseconds / 1000}s`),
-        ),
+      () => reject(new Error(`Search timed out after ${milliseconds / 1000}s`)),
       milliseconds,
     );
   });
@@ -332,8 +324,7 @@ async function query(formData, trigger) {
     const nowUnix = Math.floor(Date.now() / 1000);
     const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
     const timeperiodSecs = BigInt(formData.days * 86400);
-    const timezoneName =
-      Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     elStatus.textContent = `Searching the next ${formData.days} day(s) for windows...`;
     // yield so the status message paints before the blocking wasm call
@@ -344,8 +335,7 @@ async function query(formData, trigger) {
     if (queryGeneration !== _queryGeneration) return;
     _lastFishName = fishInfo.name;
     document.getElementById("results-fish-name").textContent =
-      fishInfo.name +
-      (formData.useFishEyes === true ? " (Fish Eyes)" : "");
+      fishInfo.name + (formData.useFishEyes === true ? " (Fish Eyes)" : "");
 
     // show fish info
     const infoBar = document.getElementById("fish-info-bar");
@@ -360,6 +350,7 @@ async function query(formData, trigger) {
         inline: true,
       }),
     );
+    updateResultsNote();
 
     let windowFishId = formData.fishId;
     if (
@@ -368,9 +359,7 @@ async function query(formData, trigger) {
       fishInfo.baitId != null
     ) {
       try {
-        const moochFishInfo = JSON.parse(
-          await get_fish(fishInfo.baitId),
-        );
+        const moochFishInfo = JSON.parse(await get_fish(fishInfo.baitId));
         if (queryGeneration !== _queryGeneration) return;
         if (!isAlwaysUp(moochFishInfo)) {
           windowFishId = moochFishInfo.id;
@@ -436,14 +425,12 @@ async function query(formData, trigger) {
     let savedCount = 0;
     for (let i = 0; i < windows.length; i++) {
       const w = windows[i];
-      const startUnix = Number(
-        unix_from_eorzea_time(BigInt(w.startEsec)),
-      );
+      const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
       const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
       const startD = new Date(startUnix * 1000);
       const endD = new Date(endUnix * 1000);
       const startDay = days[startD.getDay()];
-      const {whenStr} = fmtWhen(startUnix - nowUnix);
+      const { whenStr } = fmtWhen(startUnix - nowUnix);
       const row = document.createElement("tr");
       const wMeta = {
         ...w,
@@ -453,7 +440,7 @@ async function query(formData, trigger) {
       const wSaved = isWindowSaved(wMeta);
       if (wSaved) savedCount++;
       row.innerHTML = `
-  <td>${escapeHtml(i + 1)}</td>
+  <td>${escapeHtml(i + 1)}${fishEyesIndicator(w)}</td>
   <td>${escapeHtml(whenStr)}</td>
   <td>${escapeHtml(startDay)} ${escapeHtml(fmtDate(startD))}</td>
   <td>${escapeHtml(fmtTime(startD))} - ${escapeHtml(fmtTime(endD))}</td>
@@ -639,10 +626,7 @@ const MAX_NOTIFICATION_MINUTES = 1440;
 
 function isSavedWindow(value) {
   if (!value || typeof value !== "object") return false;
-  if (
-    !Number.isInteger(value.fishId) ||
-    typeof value.fishName !== "string"
-  ) {
+  if (!Number.isInteger(value.fishId) || typeof value.fishName !== "string") {
     return false;
   }
   if (
@@ -669,9 +653,7 @@ function supportsNotifications() {
 }
 
 function canConfigureNotifications() {
-  return (
-    supportsNotifications() && Notification.permission !== "denied"
-  );
+  return supportsNotifications() && Notification.permission !== "denied";
 }
 
 function getNotificationSettings() {
@@ -686,20 +668,14 @@ function getNotificationSettings() {
   return {
     enabled: settings?.enabled === true,
     minutesBefore: Number.isFinite(minutes)
-      ? Math.max(
-        1,
-        Math.min(Math.round(minutes), MAX_NOTIFICATION_MINUTES),
-      )
+      ? Math.max(1, Math.min(Math.round(minutes), MAX_NOTIFICATION_MINUTES))
       : DEFAULT_NOTIFICATION_MINUTES,
   };
 }
 
 function saveNotificationSettings(settings) {
   try {
-    localStorage.setItem(
-      NOTIFICATION_SETTINGS_KEY,
-      JSON.stringify(settings),
-    );
+    localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
   } catch { }
 }
 
@@ -721,10 +697,7 @@ function renderNotificationStatus() {
 
   const settings = getNotificationSettings();
   if (settings.enabled && Notification.permission === "granted") {
-    setNotificationStatus(
-      "Notifications set up successfully.",
-      "success",
-    );
+    setNotificationStatus("Notifications set up successfully.", "success");
   } else if (Notification.permission === "denied") {
     setNotificationStatus(
       "Notifications are blocked in browser settings.",
@@ -743,9 +716,7 @@ function updateNotificationInputState() {
 }
 
 function initializeNotificationControls() {
-  const settingsPanel = document.getElementById(
-    "notification-settings",
-  );
+  const settingsPanel = document.getElementById("notification-settings");
   const checkbox = document.getElementById("enable-notifications");
   const minutes = document.getElementById("notification-minutes");
   if (!settingsPanel || !checkbox || !minutes) return;
@@ -756,8 +727,7 @@ function initializeNotificationControls() {
   const settings = getNotificationSettings();
   if (
     settings.enabled &&
-    (!("Notification" in window) ||
-      Notification.permission !== "granted")
+    (!("Notification" in window) || Notification.permission !== "granted")
   ) {
     settings.enabled = false;
     saveNotificationSettings(settings);
@@ -796,7 +766,7 @@ function getNextNotificationWindow(minutesBefore) {
     const reminderUnix = window.startUnix - minutesBefore * 60;
     if (reminderUnix <= nowUnix) continue;
     if (!next || reminderUnix < next.reminderUnix) {
-      next = {...window, reminderUnix};
+      next = { ...window, reminderUnix };
     }
   }
   return next;
@@ -808,10 +778,7 @@ function formatNotificationWindow(window) {
 }
 
 function showWindowNotification(windowInfo, minutesBefore) {
-  if (
-    !supportsNotifications() ||
-    Notification.permission !== "granted"
-  ) {
+  if (!supportsNotifications() || Notification.permission !== "granted") {
     return false;
   }
 
@@ -945,9 +912,7 @@ function updateNotificationMinutes() {
 }
 
 function updateNotificationAvailability() {
-  const settingsPanel = document.getElementById(
-    "notification-settings",
-  );
+  const settingsPanel = document.getElementById("notification-settings");
   if (!settingsPanel) return;
   const available = canConfigureNotifications();
   settingsPanel.classList.toggle("hidden", !available);
@@ -1030,16 +995,13 @@ function renderSavedWindows() {
   }
 
   empty.style.display = "none";
-  document.getElementById("saved-count").textContent =
-    `(${saved.length})`;
+  document.getElementById("saved-count").textContent = `(${saved.length})`;
   dlBtn.style.display = "";
 
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   for (const w of saved) {
-    const startUnix = Number(
-      unix_from_eorzea_time(BigInt(w.startEsec)),
-    );
+    const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
     const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
     const startD = new Date(startUnix * 1000);
     const startDay = days[startD.getDay()];
@@ -1048,11 +1010,8 @@ function renderSavedWindows() {
     const eoStr = `${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}`;
 
     const nowUnix = Math.floor(Date.now() / 1000);
-    const {displayWhen, state} = fmtSavedWhen(
-      startUnix,
-      endUnix,
-      nowUnix,
-    );
+    const { displayWhen, state } = fmtSavedWhen(startUnix, endUnix, nowUnix);
+    const hasNote = getNote(w.fishId).length > 0;
 
     const div = document.createElement("div");
     div.className = `saved-item ${state}`;
@@ -1065,7 +1024,7 @@ function renderSavedWindows() {
     div.innerHTML = `
       <div class="saved-body">
         <div class="saved-top-row">
-          <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(w.fishName)}">${escapeHtml(w.fishName)}</span>
+          <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(w.fishName)}">${escapeHtml(w.fishName)}${hasNote ? `<span class="saved-note-indicator" title="Has note">&#128221;</span>` : ""}${fishEyesIndicator(w)}</span>
           <span class="window-when">${escapeHtml(displayWhen)}</span>
           <span class="saved-actions">
             <button type="button" class="dl-single" title="Download .ics" aria-label="Download saved window as calendar file">&#128197;&#11015;</button>
@@ -1080,7 +1039,7 @@ function renderSavedWindows() {
       setSelectedFish(w.fishId);
       const p = readForm();
       if (p.schedule.length === 0)
-        p.schedule.push({startSec: 0, endSec: 86400});
+        p.schedule.push({ startSec: 0, endSec: 86400 });
       saveSearch(p);
       const elStatus = document.getElementById("status");
       elStatus.className = "status";
@@ -1116,10 +1075,7 @@ function updateSavedWindowProgress(div, nowUnix, state) {
     state === "ongoing" && endUnix > startUnix
       ? Math.min(
         100,
-        Math.max(
-          0,
-          ((nowUnix - startUnix) / (endUnix - startUnix)) * 100,
-        ),
+        Math.max(0, ((nowUnix - startUnix) / (endUnix - startUnix)) * 100),
       )
       : 0;
   div.style.setProperty("--window-progress", `${progress}%`);
@@ -1134,11 +1090,7 @@ function updateSavedWindowTimers() {
       const startUnix = parseInt(div.dataset.start, 10);
       const endUnix = parseInt(div.dataset.end, 10);
       if (isNaN(startUnix)) return;
-      const {displayWhen, state} = fmtSavedWhen(
-        startUnix,
-        endUnix,
-        nowUnix,
-      );
+      const { displayWhen, state } = fmtSavedWhen(startUnix, endUnix, nowUnix);
       const previousState = div.dataset.state;
       div.querySelector(".window-when").textContent = displayWhen;
       div.className = `saved-item ${state}`;
@@ -1170,9 +1122,7 @@ function startSavedWindowTimer() {
   let hasActiveWindow = false;
   let nextStart = Infinity;
   for (const w of saved) {
-    const startUnix = Number(
-      unix_from_eorzea_time(BigInt(w.startEsec)),
-    );
+    const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
     const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
     if (startUnix <= nowUnix && endUnix > nowUnix) {
       hasActiveWindow = true;
@@ -1254,9 +1204,7 @@ function toggleFavFish(id) {
     button.classList.toggle("faved", isFaved);
     button.setAttribute(
       "aria-label",
-      isFaved
-        ? "Remove fish from favourites"
-        : "Add fish to favourites",
+      isFaved ? "Remove fish from favourites" : "Add fish to favourites",
     );
     button.innerHTML = isFaved ? "&#9829;" : "&#9825;";
   });
@@ -1266,21 +1214,113 @@ function setSelectedFish(id) {
   _selectedFishId = id;
 }
 
+// ---- Fish Notes ----
+
+const NOTES_KEY = "fishNotes";
+
+function getFishNotes() {
+  try {
+    const raw = localStorage.getItem(NOTES_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function getNote(id) {
+  const notes = getFishNotes();
+  const value = notes[String(id)];
+  return typeof value === "string" ? value : "";
+}
+
+function setNote(id, text) {
+  const notes = getFishNotes();
+  const key = String(id);
+  text = String(text ?? "").trim();
+  if (text === "") {
+    delete notes[key];
+  } else {
+    notes[key] = text;
+  }
+  try {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  } catch { }
+}
+
+let _noteFishId = 0;
+let _noteTrigger = null;
+
+function openNoteModal(fishId, fishName, trigger) {
+  const panel = document.getElementById("note-modal");
+  const overlay = document.getElementById("note-overlay");
+  _noteFishId = fishId;
+  _noteTrigger = trigger || null;
+  document.getElementById("note-fish-name").textContent = fishName;
+  const input = document.getElementById("fish-note-input");
+  input.value = getNote(fishId);
+  document.getElementById("note-status").textContent = "";
+  panel.classList.add("open");
+  panel.setAttribute("aria-hidden", "false");
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  updateModalBackgroundInert();
+  input.focus();
+}
+
+function closeNoteModal() {
+  const panel = document.getElementById("note-modal");
+  const overlay = document.getElementById("note-overlay");
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden", "true");
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden", "true");
+  updateModalBackgroundInert();
+  if (_noteTrigger && typeof _noteTrigger.focus === "function") {
+    _noteTrigger.focus();
+  }
+  _noteTrigger = null;
+}
+
+function updateResultsNote() {
+  const el = document.getElementById("results-note-body");
+  if (!el) return;
+  const note = getNote(_selectedFishId);
+  el.textContent = note ? note : "no note";
+}
+
+function renderFishNote(id) {
+  document
+    .querySelectorAll(`.fish-note-indicator[data-fish-id="${id}"]`)
+    .forEach((el) => {
+      el.style.display = getNote(id) ? "" : "none";
+    });
+}
+
+function saveNoteFromModal() {
+  const text = document.getElementById("fish-note-input").value;
+  setNote(_noteFishId, text);
+  const status = document.getElementById("note-status");
+  status.className = "import-export-status success";
+  status.textContent = "Note saved.";
+  renderFishNote(_noteFishId);
+  renderFishList();
+  if (_noteFishId === _selectedFishId) updateResultsNote();
+}
+
 // ---- Results Panel ----
 
 let _resultsTrigger = null;
 
 function updateModalBackgroundInert() {
   const modalOpen =
-    document
-      .getElementById("results-panel")
-      .classList.contains("open") ||
-    document
-      .getElementById("import-export-modal")
-      .classList.contains("open");
+    document.getElementById("results-panel").classList.contains("open") ||
+    document.getElementById("import-export-modal").classList.contains("open") ||
+    document.getElementById("note-modal").classList.contains("open");
   document
     .querySelectorAll(
-      "main > *:not(#results-overlay):not(#results-panel):not(#import-export-overlay):not(#import-export-modal), footer",
+      "main > *:not(#results-overlay):not(#results-panel):not(#import-export-overlay):not(#import-export-modal):not(#note-overlay):not(#note-modal), footer",
     )
     .forEach((element) => {
       element.inert = modalOpen;
@@ -1319,8 +1359,7 @@ function openImportExport(trigger) {
   const panel = document.getElementById("import-export-modal");
   const overlay = document.getElementById("import-export-overlay");
   if (trigger) _importExportTrigger = trigger;
-  document.getElementById("storage-export").value =
-    exportLocalStorage();
+  document.getElementById("storage-export").value = exportLocalStorage();
   document.getElementById("import-export-status").textContent = "";
   panel.classList.add("open");
   panel.setAttribute("aria-hidden", "false");
@@ -1364,17 +1403,30 @@ document
 document
   .getElementById("import-export-overlay")
   .addEventListener("click", closeImportExport);
+document.getElementById("note-close").addEventListener("click", closeNoteModal);
+document
+  .getElementById("note-overlay")
+  .addEventListener("click", closeNoteModal);
+document.getElementById("note-save").addEventListener("click", () => {
+  saveNoteFromModal();
+  closeNoteModal();
+});
+document.getElementById("note-clear").addEventListener("click", () => {
+  document.getElementById("fish-note-input").value = "";
+  saveNoteFromModal();
+  closeNoteModal();
+});
+document.getElementById("results-note-edit").addEventListener("click", (e) => {
+  openNoteModal(_selectedFishId, _lastFishName, e.currentTarget);
+});
 document
   .getElementById("storage-import-apply")
   .addEventListener("click", () => {
     const status = document.getElementById("import-export-status");
     status.className = "import-export-status";
     try {
-      applyLocalStorageImport(
-        document.getElementById("storage-import").value,
-      );
-      document.getElementById("storage-export").value =
-        exportLocalStorage();
+      applyLocalStorageImport(document.getElementById("storage-import").value);
+      document.getElementById("storage-export").value = exportLocalStorage();
       status.className = "import-export-status success";
       status.textContent = "Imported data successfully.";
     } catch (error) {
@@ -1384,10 +1436,13 @@ document
   });
 document.addEventListener("keydown", (event) => {
   const resultsPanel = document.getElementById("results-panel");
-  const importExportPanel = document.getElementById(
-    "import-export-modal",
-  );
+  const importExportPanel = document.getElementById("import-export-modal");
+  const notePanel = document.getElementById("note-modal");
   if (event.key === "Escape") {
+    if (notePanel.classList.contains("open")) {
+      closeNoteModal();
+      return;
+    }
     if (importExportPanel.classList.contains("open")) {
       closeImportExport();
       return;
@@ -1400,20 +1455,24 @@ document.addEventListener("keydown", (event) => {
   const panel = importExportPanel.classList.contains("open")
     ? importExportPanel
     : resultsPanel;
-  if (event.key !== "Tab" || !panel.classList.contains("open")) return;
-  const focusable = panel.querySelectorAll(
+  if (notePanel.classList.contains("open")) {
+    if (event.key !== "Tab" || !notePanel.classList.contains("open")) return;
+  }
+  const activePanel = notePanel.classList.contains("open") ? notePanel : panel;
+  if (event.key !== "Tab" || !activePanel.classList.contains("open")) return;
+  const focusable = activePanel.querySelectorAll(
     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
   );
   if (focusable.length === 0) {
     event.preventDefault();
-    panel.focus();
+    activePanel.focus();
     return;
   }
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   if (
-    document.activeElement === panel ||
-    !panel.contains(document.activeElement)
+    document.activeElement === activePanel ||
+    !activePanel.contains(document.activeElement)
   ) {
     event.preventDefault();
     (event.shiftKey ? last : first).focus();
@@ -1454,19 +1513,15 @@ async function main() {
   }
 }
 
-document
-  .getElementById("add-schedule")
-  .addEventListener("click", () => {
-    const container = document.getElementById("schedule-rows");
-    container.appendChild(
-      createScheduleRow({startSec: 0, endSec: 86400}),
-    );
-  });
+document.getElementById("add-schedule").addEventListener("click", () => {
+  const container = document.getElementById("schedule-rows");
+  container.appendChild(createScheduleRow({ startSec: 0, endSec: 86400 }));
+});
 
 document.getElementById("apply-btn").addEventListener("click", () => {
   const p = readForm();
   if (p.schedule.length === 0) {
-    p.schedule.push({startSec: 0, endSec: 86400});
+    p.schedule.push({ startSec: 0, endSec: 86400 });
   }
   saveSearch(p);
   _nextWindowCache.clear();
@@ -1486,40 +1541,34 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-document
-  .getElementById("config-toggle")
-  .addEventListener("click", function () {
-    const content = document.getElementById("config-content");
-    content.classList.toggle("hidden");
-    this.classList.toggle("collapsed");
-    this.setAttribute(
-      "aria-expanded",
-      String(!content.classList.contains("hidden")),
-    );
-    content.setAttribute(
-      "aria-hidden",
-      String(content.classList.contains("hidden")),
-    );
-  });
+document.getElementById("config-toggle").addEventListener("click", function () {
+  const content = document.getElementById("config-content");
+  content.classList.toggle("hidden");
+  this.classList.toggle("collapsed");
+  this.setAttribute(
+    "aria-expanded",
+    String(!content.classList.contains("hidden")),
+  );
+  content.setAttribute(
+    "aria-hidden",
+    String(content.classList.contains("hidden")),
+  );
+});
 
-document
-  .getElementById("download-ics")
-  .addEventListener("click", downloadIcs);
+document.getElementById("download-ics").addEventListener("click", downloadIcs);
 
 document
   .getElementById("download-saved-ics")
   .addEventListener("click", downloadSavedIcs);
 
-document
-  .getElementById("saved-toggle")
-  .addEventListener("click", function () {
-    _savedOpen = !_savedOpen;
-    document.getElementById("saved-content").style.display = _savedOpen
-      ? ""
-      : "none";
-    this.classList.toggle("collapsed", !_savedOpen);
-    this.setAttribute("aria-expanded", String(_savedOpen));
-  });
+document.getElementById("saved-toggle").addEventListener("click", function () {
+  _savedOpen = !_savedOpen;
+  document.getElementById("saved-content").style.display = _savedOpen
+    ? ""
+    : "none";
+  this.classList.toggle("collapsed", !_savedOpen);
+  this.setAttribute("aria-expanded", String(_savedOpen));
+});
 
 document.getElementById("results").addEventListener("click", (e) => {
   const dlBtn = e.target.closest(".dl-single");
@@ -1574,13 +1623,9 @@ function createFishCard(f, opts = {}) {
   } else {
     const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
     if (next) {
-      const startUnix = Number(
-        unix_from_eorzea_time(BigInt(next.startEsec)),
-      );
-      const endUnix = Number(
-        unix_from_eorzea_time(BigInt(next.endEsec)),
-      );
-      const {whenStr, state} = fmtWhen(
+      const startUnix = Number(unix_from_eorzea_time(BigInt(next.startEsec)));
+      const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+      const { whenStr, state } = fmtWhen(
         startUnix - nowUnix,
         endUnix - nowUnix,
       );
@@ -1592,8 +1637,7 @@ function createFishCard(f, opts = {}) {
     (f.previousWeatherSet && f.previousWeatherSet.length
       ? f.previousWeatherSet.join(" / ") + " → "
       : "") + (f.weatherSet ? f.weatherSet.join(" / ") : "") || "-";
-  const pct =
-    f.fishUptime !== undefined ? f.fishUptime * 100 : undefined;
+  const pct = f.fishUptime !== undefined ? f.fishUptime * 100 : undefined;
   const uptimeStr =
     pct !== undefined
       ? " | " + pct.toFixed(pct < 0.1 ? 2 : 1) + "% uptime"
@@ -1610,16 +1654,11 @@ function createFishCard(f, opts = {}) {
       Array.isArray(f.intuitionRequirements) &&
       f.intuitionRequirements.length
     ) {
-      const intuitionLength = formatRealDuration(
-        f.intuitionLengthSeconds,
-      );
+      const intuitionLength = formatRealDuration(f.intuitionLengthSeconds);
       requirementLines.push(
         `Intuition${intuitionLength ? ` (${intuitionLength})` : ""}: ` +
         f.intuitionRequirements
-          .map(
-            (requirement) =>
-              `${requirement.amount} ${requirement.fish}`,
-          )
+          .map((requirement) => `${requirement.amount} ${requirement.fish}`)
           .join(" | "),
       );
     }
@@ -1632,29 +1671,27 @@ function createFishCard(f, opts = {}) {
     requirementLines.push(technique.join(" | "));
   }
   const requirementsHtml = requirementLines
-    .map(
-      (line) =>
-        `<span class="fish-requirement">${escapeHtml(line)}</span>`,
-    )
+    .map((line) => `<span class="fish-requirement">${escapeHtml(line)}</span>`)
     .join("");
   const isFaved = opts.faved || false;
   const activeSavedCount = opts.inline
     ? 0
     : getSavedWindows().filter(
       (saved) =>
-        saved.fishId === f.id &&
-        BigInt(saved.endEsec) > BigInt(nowEorzea),
+        saved.fishId === f.id && BigInt(saved.endEsec) > BigInt(nowEorzea),
     ).length;
   const displayName = `${f.name}${activeSavedCount ? ` (${activeSavedCount})` : ""}`;
   const localWindow = alwaysUp
     ? "always up"
     : `${f.windowStart.split(":").slice(0, 2).join(":")}-${f.windowEnd.split(":").slice(0, 2).join(":")}`;
   const windowDisplay = alwaysUp ? localWindow : `ET ${localWindow}`;
+  const note = getNote(f.id);
+  const hasNote = note.length > 0;
   div.innerHTML = `
       <input type="checkbox" aria-label="Mark ${escapeHtml(f.name)} as caught" ${opts.caught ? "checked" : ""} />
       <button type="button" class="fav-star${isFaved ? " faved" : ""}" data-fish-id="${f.id}" aria-label="${isFaved ? "Remove fish from favourites" : "Add fish to favourites"}">${isFaved ? "&#9829;" : "&#9825;"}</button>
       <div class="fish-body" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(f.name)}">
-        <span class="fish-name truncate">${escapeHtml(displayName)} ${nextStr}</span>
+        <span class="fish-name truncate">${escapeHtml(displayName)}${hasNote ? `<span class="fish-note-indicator" data-fish-id="${f.id}" title="Has note">&#128221;</span>` : ""} ${nextStr}</span>
         <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ${escapeHtml(windowDisplay)}</span>
         ${requirementsHtml}
       </div>
@@ -1671,7 +1708,7 @@ function createFishCard(f, opts = {}) {
     setSelectedFish(f.id);
     const p = readForm();
     if (p.schedule.length === 0)
-      p.schedule.push({startSec: 0, endSec: 86400});
+      p.schedule.push({ startSec: 0, endSec: 86400 });
     saveSearch(p);
     const elStatus = document.getElementById("status");
     elStatus.className = "status";
@@ -1703,8 +1740,7 @@ function patchSortValue(patch) {
 
 function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
   if (sort === "uptime") {
-    const uptimeDiff =
-      (a.fishUptime ?? Infinity) - (b.fishUptime ?? Infinity);
+    const uptimeDiff = (a.fishUptime ?? Infinity) - (b.fishUptime ?? Infinity);
     if (uptimeDiff !== 0) return uptimeDiff;
   } else if (sort === "patch") {
     const patchDiff = patchSortValue(b.patch) - patchSortValue(a.patch);
@@ -1764,14 +1800,10 @@ function renderFishList() {
         if (isNaN(val)) continue;
         const threshold = isPct ? val / 100 : val;
         filtered = filtered.filter((f) =>
-          op === ">"
-            ? f.fishUptime > threshold
-            : f.fishUptime < threshold,
+          op === ">" ? f.fishUptime > threshold : f.fishUptime < threshold,
         );
       } else {
-        filtered = filtered.filter((f) =>
-          f.name.toLowerCase().includes(pq),
-        );
+        filtered = filtered.filter((f) => f.name.toLowerCase().includes(pq));
       }
     }
   }
@@ -1796,9 +1828,7 @@ function renderFishList() {
   const favCount = favs.length;
   document.getElementById("fish-list-stats-text").textContent =
     `| ${caughtCount}/${total} caught | ${favCount} faved` +
-    (q || hideCaught || bigFishOnly
-      ? ` | ${filtered.length} shown`
-      : "") +
+    (q || hideCaught || bigFishOnly ? ` | ${filtered.length} shown` : "") +
     ` | Last updated: ${new Date().toLocaleTimeString()}`;
 
   scroll.innerHTML = "";
@@ -1819,30 +1849,22 @@ function renderFishList() {
 
 let _fishSearchTimer = null;
 
-document
-  .getElementById("fish-list-search")
-  .addEventListener("input", () => {
-    clearTimeout(_fishSearchTimer);
-    _fishSearchTimer = setTimeout(renderFishList, 100);
-  });
+document.getElementById("fish-list-search").addEventListener("input", () => {
+  clearTimeout(_fishSearchTimer);
+  _fishSearchTimer = setTimeout(renderFishList, 100);
+});
 
-document
-  .getElementById("hide-caught")
-  .addEventListener("change", () => {
-    renderFishList();
-  });
+document.getElementById("hide-caught").addEventListener("change", () => {
+  renderFishList();
+});
 
-document
-  .getElementById("big-fish-only")
-  .addEventListener("change", () => {
-    renderFishList();
-  });
+document.getElementById("big-fish-only").addEventListener("change", () => {
+  renderFishList();
+});
 
-document
-  .getElementById("fish-list-sort")
-  .addEventListener("change", () => {
-    renderFishList();
-  });
+document.getElementById("fish-list-sort").addEventListener("change", () => {
+  renderFishList();
+});
 
 document
   .getElementById("fish-list-search-clear")
@@ -1851,22 +1873,18 @@ document
     renderFishList();
   });
 
-document
-  .getElementById("filter-help")
-  .addEventListener("click", (event) => {
-    const box = document.getElementById("filter-help-box");
-    const visible = box.classList.toggle("visible");
-    event.currentTarget.setAttribute("aria-expanded", String(visible));
-  });
+document.getElementById("filter-help").addEventListener("click", (event) => {
+  const box = document.getElementById("filter-help-box");
+  const visible = box.classList.toggle("visible");
+  event.currentTarget.setAttribute("aria-expanded", String(visible));
+});
 
 document.addEventListener("click", (e) => {
   if (
     !e.target.closest("#filter-help") &&
     !e.target.closest("#filter-help-box")
   ) {
-    document
-      .getElementById("filter-help-box")
-      .classList.remove("visible");
+    document.getElementById("filter-help-box").classList.remove("visible");
     document
       .getElementById("filter-help")
       .setAttribute("aria-expanded", "false");

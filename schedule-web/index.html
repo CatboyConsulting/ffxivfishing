@@ -158,6 +158,13 @@
       </div>
       <div class="results-scroll" id="results-scroll">
         <div id="fish-info-bar" class="fish-info-bar" style="display: none"></div>
+        <div id="results-note" class="results-note">
+          <div class="results-note-header">
+            <span class="results-note-title">Note</span>
+            <button type="button" class="results-note-edit" id="results-note-edit" title="Edit note">edit</button>
+          </div>
+          <div class="results-note-body" id="results-note-body">no note</div>
+        </div>
         <table id="results" style="display: none">
           <caption class="visually-hidden">
             Fishing windows for the selected fish
@@ -200,6 +207,33 @@
           Validate and Apply
         </button>
         <p id="import-export-status" class="import-export-status" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div class="results-overlay" id="note-overlay" aria-hidden="true"></div>
+    <div class="results-panel" id="note-modal" role="dialog" aria-modal="true" aria-labelledby="note-title"
+      tabindex="-1" aria-hidden="true">
+      <div class="panel-header">
+        <h2 id="note-title">
+          Note:
+          <span class="fish-name-header" id="note-fish-name"></span>
+        </h2>
+        <button type="button" class="panel-close" id="note-close" aria-label="Close note">
+          &times;
+        </button>
+      </div>
+      <div class="import-export-content">
+        <label for="fish-note-input">Note</label>
+        <textarea id="fish-note-input" spellcheck="false" placeholder="Notes for this fish"></textarea>
+        <div class="note-actions">
+          <button type="button" id="note-save" class="btn-primary">
+            Save
+          </button>
+          <button type="button" id="note-clear" class="btn-primary note-clear">
+            Clear
+          </button>
+        </div>
+        <p id="note-status" class="import-export-status" role="status" aria-live="polite"></p>
       </div>
     </div>
 
