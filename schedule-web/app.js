@@ -137,6 +137,14 @@ function isAlwaysUp(fish) {
   return Number.isFinite(fish.fishUptime) && fish.fishUptime >= 1;
 }
 
+function isPrerequisiteAlwaysUp(prerequisite) {
+  return (
+    !!prerequisite &&
+    eoTime(prerequisite.startDisplay) === "00:00" &&
+    eoTime(prerequisite.endDisplay) === "00:00"
+  );
+}
+
 let _nextWindowCacheMinute = -1;
 const _nextWindowCache = new Map();
 
@@ -464,6 +472,7 @@ async function query(formData, trigger) {
         w,
         "intuition-detail",
         fishInfo.intuitionLengthSeconds,
+        true,
       );
       if (intuitionInfo) {
         const detailRow = document.createElement("tr");
@@ -973,6 +982,40 @@ function windowKey(w) {
   return `${w.fishId}-${w.startEsec}-${w.endEsec}`;
 }
 
+function getIntuitionMonitorRange(w) {
+  const prereqs = w.intuition?.prerequisiteWindows;
+  if (!Array.isArray(prereqs) || prereqs.length === 0) return null;
+  let start = null;
+  for (const p of prereqs) {
+    if (isPrerequisiteAlwaysUp(p)) continue;
+    const s = Number(unix_from_eorzea_time(BigInt(p.startEsec)));
+    if (start === null || s < start) start = s;
+  }
+  if (start === null) return null;
+  const end = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  return { start, end };
+}
+
+function fmtPrereqStatus(startUnix, endUnix, nowUnix) {
+  const { displayWhen, state } = fmtSavedWhen(startUnix, endUnix, nowUnix);
+  return { label: displayWhen, state: state === "ongoing" ? "up" : state };
+}
+
+function updatePrereqStatus(el, nowUnix) {
+  const start = Number(el.dataset.prereqStart);
+  const end = Number(el.dataset.prereqEnd);
+  const { label, state } = fmtPrereqStatus(start, end, nowUnix);
+  el.textContent = label;
+  el.classList.remove("up", "past", "future");
+  el.classList.add(state);
+}
+
+function updateSavedWindowPrereqStatuses(nowUnix) {
+  document
+    .querySelectorAll("#saved-windows-list .intuition-prerequisite-status")
+    .forEach((el) => updatePrereqStatus(el, nowUnix));
+}
+
 function isWindowSaved(w) {
   const saved = getSavedWindows();
   const key = windowKey(w);
@@ -1021,7 +1064,7 @@ function downloadSavedIcsItem(w) {
   );
 }
 
-function intuitionInfoHtml(w, containerClass, intuitionLengthSeconds) {
+function intuitionInfoHtml(w, containerClass, intuitionLengthSeconds, showStatus) {
   const prerequisiteWindows = w.intuition?.prerequisiteWindows;
   if (!prerequisiteWindows?.length) return "";
   const intuitionLength = formatRealDuration(intuitionLengthSeconds);
@@ -1052,9 +1095,18 @@ function intuitionInfoHtml(w, containerClass, intuitionLengthSeconds) {
         : `<span class="intuition-prerequisite-et">ET ${escapeHtml(eorzeaWindow)}</span>
           <span class="intuition-prerequisite-separator"> | </span>
           <span class="intuition-prerequisite-local">${escapeHtml(localWindow)}</span>`;
+      let statusHtml = "";
+      if (showStatus && !alwaysUp) {
+        const { label, state } = fmtPrereqStatus(
+          prerequisiteStartUnix,
+          prerequisiteEndUnix,
+          Math.floor(Date.now() / 1000),
+        );
+        statusHtml = `<span class="intuition-prerequisite-status ${state}" data-prereq-start="${prerequisiteStartUnix}" data-prereq-end="${prerequisiteEndUnix}">${escapeHtml(label)}</span>`;
+      }
       return `
         <li>
-          <span class="intuition-prerequisite-fish">${escapeHtml(`${prerequisite.amount} ${fishName}`)}${fishEyesIndicator(prerequisite)}</span>
+          <span class="intuition-prerequisite-fish">${escapeHtml(`${prerequisite.amount} ${fishName}`)}${fishEyesIndicator(prerequisite)}${statusHtml}</span>
           <span class="intuition-prerequisite-window">${timeWindow}</span>
         </li>`;
     })
@@ -1132,6 +1184,7 @@ function renderSavedWindows() {
           "saved-intuition-setup",
           w.intuitionLengthSeconds ??
           _allFishInfo.find((fish) => fish.id === w.fishId)?.intuitionLengthSeconds,
+          true,
         )}
       </div>
     `;
@@ -1164,6 +1217,7 @@ function renderSavedWindows() {
     });
     container.appendChild(div);
   }
+  updateSavedWindowPrereqStatuses(Math.floor(Date.now() / 1000));
 }
 
 let _savedTimerId = null;
@@ -1206,11 +1260,14 @@ function updateSavedWindowTimers() {
       }
       updateSavedWindowProgress(div, nowUnix, state);
     });
+  updateSavedWindowPrereqStatuses(nowUnix);
   if (announcements.length) {
     document.getElementById("saved-window-announcer").textContent =
       announcements.join(" ");
   }
 }
+
+const INTUITION_UPDATE_INTERVAL_MS = 5000;
 
 function startSavedWindowTimer() {
   if (_savedTimerId) {
@@ -1221,6 +1278,7 @@ function startSavedWindowTimer() {
   const saved = getSavedWindows();
   const nowUnix = Math.floor(Date.now() / 1000);
   let hasActiveWindow = false;
+  let hasMonitorWindow = false;
   let nextStart = Infinity;
   for (const w of saved) {
     const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
@@ -1234,18 +1292,30 @@ function startSavedWindowTimer() {
     ) {
       nextStart = startUnix;
     }
+
+    const monitor = getIntuitionMonitorRange(w);
+    if (monitor) {
+      if (nowUnix >= monitor.start && nowUnix < monitor.end) {
+        hasMonitorWindow = true;
+      }
+      if (monitor.start > nowUnix && monitor.start < nextStart) {
+        nextStart = monitor.start;
+      }
+    }
   }
 
-  if (!hasActiveWindow && nextStart === Infinity) return;
+  if (!hasActiveWindow && !hasMonitorWindow && nextStart === Infinity) return;
 
   const diff = nextStart - nowUnix;
   const interval = hasActiveWindow
     ? 1000
-    : diff < 60
-      ? 1000
-      : diff > 3600
-        ? 900000
-        : Math.min(60000, Math.max(1000, diff * 1000));
+    : hasMonitorWindow
+      ? INTUITION_UPDATE_INTERVAL_MS
+      : diff < 60
+        ? 1000
+        : diff > 3600
+          ? 900000
+          : Math.min(60000, Math.max(1000, diff * 1000));
 
   _savedTimerId = setInterval(() => {
     updateSavedWindowTimers();
@@ -1407,6 +1477,7 @@ function saveNoteFromModal() {
   status.textContent = "Note saved.";
   renderFishNote(_noteFishId);
   renderFishList();
+  renderSavedWindows();
   if (_noteFishId === _selectedFishId) updateResultsNote();
 }
 
@@ -1734,7 +1805,7 @@ function createFishCard(f, opts = {}) {
         startUnix - nowUnix,
         endUnix - nowUnix,
       );
-      nextStr = `<span class="fish-next-window ${state}">${state === "future" ? "in " + whenStr : whenStr}</span>`;
+      nextStr = `<span class="fish-next-window ${state}">${state === "future" ? "in " + whenStr : whenStr}</span>${fishEyesIndicator(next)}`;
     }
   }
 
