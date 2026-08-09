@@ -464,6 +464,7 @@ async function query(formData, trigger) {
   <td>
     <button type="button" class="save-window-btn${wSaved ? " saved" : ""}" data-idx="${i}" title="${wSaved ? "Remove saved window" : "Save window"}" aria-label="${wSaved ? "Remove saved window" : "Save window"}">${wSaved ? "&#128278;" : "&#128204;"}</button>
     <button type="button" class="dl-single" data-idx="${i}" aria-label="Download window as calendar file">&#128197;&#11015;</button>
+    ${getGoogleCalendarEnabled() ? `<button type="button" class="dl-gcal" data-idx="${i}" aria-label="Add to Google Calendar">&#128197;<span class="gcal-logo">G</span></button>` : ""}
   </td>
 `;
       elTbody.appendChild(row);
@@ -584,6 +585,70 @@ function downloadSingleIcs(idx) {
   downloadIcsCalendar(
     [icsVevent(w, _lastFishName, getIcsAlarmMinutes())],
     "window-" + (idx + 1) + "-" + kebab(_lastFishName) + ".ics",
+  );
+}
+
+function getGoogleCalendarEnabled() {
+  return getNotificationSettings().googleCalendar === true;
+}
+
+function fmtGoogleDate(unixSec) {
+  return new Date(unixSec * 1000)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
+}
+
+function googleCalendarUrl(unixStart, unixEnd, title, description) {
+  const params = new URLSearchParams();
+  params.set("action", "TEMPLATE");
+  params.set("text", title);
+  params.set("dates", fmtGoogleDate(unixStart) + "/" + fmtGoogleDate(unixEnd));
+  if (description) params.set("details", description);
+  return "https://www.google.com/calendar/render?" + params.toString();
+}
+
+function downloadSingleGcal(idx) {
+  const w = _lastWindows[idx];
+  if (!w) return;
+  const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
+  const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  globalThis.open(
+    googleCalendarUrl(
+      startUnix,
+      endUnix,
+      _lastFishName + " Window",
+      "Window " +
+      (idx + 1) +
+      " for " +
+      _lastFishName +
+      " ET " +
+      eoTime(w.startDisplay) +
+      " - " +
+      eoTime(w.endDisplay),
+    ),
+    "_blank",
+    "noopener",
+  );
+}
+
+function downloadSavedGcalItem(w) {
+  const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
+  const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  globalThis.open(
+    googleCalendarUrl(
+      startUnix,
+      endUnix,
+      w.fishName + " (" + eoTime(w.startDisplay) + ")",
+      "Window for " +
+      w.fishName +
+      "\\nET " +
+      eoTime(w.startDisplay) +
+      " - " +
+      eoTime(w.endDisplay),
+    ),
+    "_blank",
+    "noopener",
   );
 }
 
@@ -717,6 +782,7 @@ function getNotificationSettings() {
   return {
     enabled: settings?.enabled === true,
     exportAlarm: settings?.exportAlarm !== false,
+    googleCalendar: settings?.googleCalendar === true,
     minutesBefore: Number.isFinite(minutes)
       ? Math.max(1, Math.min(Math.round(minutes), MAX_NOTIFICATION_MINUTES))
       : DEFAULT_NOTIFICATION_MINUTES,
@@ -770,7 +836,9 @@ function initializeNotificationControls() {
   const checkbox = document.getElementById("enable-notifications");
   const minutes = document.getElementById("notification-minutes");
   const icsAlarm = document.getElementById("export-ics-alarm");
-  if (!settingsPanel || !checkbox || !minutes || !icsAlarm) return;
+  const googleCal = document.getElementById("export-google-calendar");
+  if (!settingsPanel || !checkbox || !minutes || !icsAlarm || !googleCal)
+    return;
 
   updateNotificationAvailability();
 
@@ -785,6 +853,7 @@ function initializeNotificationControls() {
   checkbox.checked = settings.enabled;
   minutes.value = settings.minutesBefore;
   icsAlarm.checked = settings.exportAlarm;
+  googleCal.checked = settings.googleCalendar;
   updateNotificationInputState();
   renderNotificationStatus();
 }
@@ -978,6 +1047,14 @@ function handleIcsAlarmToggle() {
   saveNotificationSettings(settings);
 }
 
+function handleGoogleCalendarToggle() {
+  const checkbox = document.getElementById("export-google-calendar");
+  if (!checkbox) return;
+  const settings = getNotificationSettings();
+  settings.googleCalendar = checkbox.checked;
+  saveNotificationSettings(settings);
+}
+
 function windowKey(w) {
   return `${w.fishId}-${w.startEsec}-${w.endEsec}`;
 }
@@ -1064,7 +1141,12 @@ function downloadSavedIcsItem(w) {
   );
 }
 
-function intuitionInfoHtml(w, containerClass, intuitionLengthSeconds, showStatus) {
+function intuitionInfoHtml(
+  w,
+  containerClass,
+  intuitionLengthSeconds,
+  showStatus,
+) {
   const prerequisiteWindows = w.intuition?.prerequisiteWindows;
   if (!prerequisiteWindows?.length) return "";
   const intuitionLength = formatRealDuration(intuitionLengthSeconds);
@@ -1175,17 +1257,19 @@ function renderSavedWindows() {
           <span class="window-when">${escapeHtml(displayWhen)}</span>
           <span class="saved-actions">
             <button type="button" class="dl-single" title="Download .ics" aria-label="Download saved window as calendar file">&#128197;&#11015;</button>
+            ${getGoogleCalendarEnabled() ? `<button type="button" class="dl-gcal" title="Add to Google Calendar" aria-label="Add saved window to Google Calendar">&#128197;<span class="gcal-logo">G</span></button>` : ""}
             <button type="button" class="remove-saved" title="Remove" aria-label="Remove saved window">&#10005;</button>
           </span>
         </div>
         <span class="window-detail">${escapeHtml(startDay)} | ${escapeHtml(dateStr)} ${escapeHtml(timeStr)} | ET ${escapeHtml(eoStr)}</span>
         ${intuitionInfoHtml(
-          w,
-          "saved-intuition-setup",
-          w.intuitionLengthSeconds ??
-          _allFishInfo.find((fish) => fish.id === w.fishId)?.intuitionLengthSeconds,
-          true,
-        )}
+      w,
+      "saved-intuition-setup",
+      w.intuitionLengthSeconds ??
+      _allFishInfo.find((fish) => fish.id === w.fishId)
+        ?.intuitionLengthSeconds,
+      true,
+    )}
       </div>
     `;
     const savedFish = div.querySelector(".fish-name");
@@ -1215,6 +1299,12 @@ function renderSavedWindows() {
     div.querySelector(".dl-single").addEventListener("click", () => {
       downloadSavedIcsItem(w);
     });
+    const gcalBtn = div.querySelector(".dl-gcal");
+    if (gcalBtn) {
+      gcalBtn.addEventListener("click", () => {
+        downloadSavedGcalItem(w);
+      });
+    }
     container.appendChild(div);
   }
   updateSavedWindowPrereqStatuses(Math.floor(Date.now() / 1000));
@@ -1710,6 +1800,9 @@ document
 document
   .getElementById("export-ics-alarm")
   .addEventListener("change", handleIcsAlarmToggle);
+document
+  .getElementById("export-google-calendar")
+  .addEventListener("change", handleGoogleCalendarToggle);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     updateNotificationAvailability();
@@ -1749,6 +1842,8 @@ document.getElementById("saved-toggle").addEventListener("click", function () {
 document.getElementById("results").addEventListener("click", (e) => {
   const dlBtn = e.target.closest(".dl-single");
   if (dlBtn) downloadSingleIcs(parseInt(dlBtn.dataset.idx, 10));
+  const gcalBtn = e.target.closest(".dl-gcal");
+  if (gcalBtn) downloadSingleGcal(parseInt(gcalBtn.dataset.idx, 10));
   const saveBtn = e.target.closest(".save-window-btn");
   if (saveBtn) {
     const idx = parseInt(saveBtn.dataset.idx, 10);

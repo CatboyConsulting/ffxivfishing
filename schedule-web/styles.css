@@ -300,7 +300,7 @@ td {
 
 #saved-windows-list .intuition-prerequisite-status.up,
 .intuition-detail .intuition-prerequisite-status.up {
-  color: var(--bg-primary);
+  color: var(--text-accent);
 }
 
 #saved-windows-list .saved-item.past .intuition-prerequisite-status {
@@ -934,6 +934,31 @@ td {
   color: var(--text-heading);
 }
 
+.dl-gcal {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.dl-gcal:hover {
+  color: var(--text-heading);
+}
+
+.gcal-logo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .save-window-btn {
   background: none;
   border: none;
@@ -999,8 +1024,8 @@ footer {
   resize: vertical;
   margin-bottom: 0.75rem;
   font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
   font-size: 0.75rem;
 }
 
