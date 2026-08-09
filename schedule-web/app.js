@@ -36,6 +36,8 @@ let _selectedFishId = 0;
 let _queryGeneration = 0;
 let _wasmReady = false;
 let _notificationTimerId = null;
+let _fishHydrationGen = 0;
+let _fishHydrationActive = false;
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -1401,7 +1403,7 @@ function startSavedWindowTimer() {
     ? 1000
     : hasMonitorWindow
       ? INTUITION_UPDATE_INTERVAL_MS
-      : diff < 60
+      : diff <= 120
         ? 1000
         : diff > 3600
           ? 900000
@@ -1891,6 +1893,8 @@ function createFishCard(f, opts = {}) {
   const alwaysUp = isAlwaysUp(f) && !hasConditionalAvailability;
   if (alwaysUp) {
     nextStr = '<span class="fish-next-window">always up</span>';
+  } else if (opts.deferNextWindow) {
+    nextStr = `<span class="fish-next-window fish-next-deferred" data-fish-id="${f.id}">...</span>`;
   } else {
     const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
     if (next) {
@@ -2034,9 +2038,52 @@ function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
   return a.name.localeCompare(b.name);
 }
 
+function hydrateFishNextWindows(elements) {
+  if (!elements || elements.length === 0) return;
+  _fishHydrationGen++;
+  const gen = _fishHydrationGen;
+  let i = 0;
+  const CHUNK = 8;
+  function processChunk() {
+    if (gen !== _fishHydrationGen) return;
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
+    const end = Math.min(i + CHUNK, elements.length);
+    for (; i < end; i++) {
+      const el = elements[i];
+      if (!el.isConnected) continue;
+      const fishId = parseInt(el.dataset.fishId, 10);
+      const next = getNextFishWindow(fishId, nowUnix, nowEorzea);
+      if (next) {
+        const startUnix = Number(unix_from_eorzea_time(BigInt(next.startEsec)));
+        const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+        const { whenStr, state } = fmtWhen(
+          startUnix - nowUnix,
+          endUnix - nowUnix,
+        );
+        el.className = `fish-next-window ${state}`;
+        el.textContent = state === "future" ? "in " + whenStr : whenStr;
+        el.insertAdjacentHTML("afterend", fishEyesIndicator(next));
+      } else {
+        el.className = "fish-next-window";
+        el.textContent = "";
+      }
+    }
+    if (i < elements.length) {
+      requestAnimationFrame(processChunk);
+    } else {
+      _fishHydrationActive = false;
+    }
+  }
+  _fishHydrationActive = true;
+  requestAnimationFrame(processChunk);
+}
+
 function renderFishList() {
   const caught = getList(CAUGHT_KEY);
   const favs = getList(FAV_KEY);
+  const caughtSet = new Set(caught);
+  const favSet = new Set(favs);
   const hideCaught = document.getElementById("hide-caught").checked;
   const bigFishOnly = document.getElementById("big-fish-only").checked;
   const q = document
@@ -2064,8 +2111,8 @@ function renderFishList() {
         const patchQ = pq.slice(6);
         filtered = filtered.filter((f) => f.patch.includes(patchQ));
       } else if (pq.startsWith("uptime>") || pq.startsWith("uptime<")) {
-        const op = pq[6]; // > or <
-        const raw = part.slice(7); // keep original case for number
+        const op = pq[6];
+        const raw = part.slice(7);
         const isPct = raw.endsWith("%");
         const val = parseFloat(isPct ? raw.slice(0, -1) : raw);
         if (isNaN(val)) continue;
@@ -2079,20 +2126,19 @@ function renderFishList() {
     }
   }
 
-  // Keep favourites first, then apply the selected sort.
-  filtered = filtered.slice().sort((a, b) => {
-    const aFav = favs.includes(a.id) ? 0 : 1;
-    const bFav = favs.includes(b.id) ? 0 : 1;
-    if (aFav !== bFav) return aFav - bFav;
-    return compareFishBySort(a, b, sort, nowUnix, nowEorzea);
-  });
-
   if (hideCaught) {
-    filtered = filtered.filter((f) => !caught.includes(f.id));
+    filtered = filtered.filter((f) => !caughtSet.has(f.id));
   }
   if (bigFishOnly) {
     filtered = filtered.filter((f) => f.bigFish);
   }
+
+  filtered = filtered.slice().sort((a, b) => {
+    const aFav = favSet.has(a.id) ? 0 : 1;
+    const bFav = favSet.has(b.id) ? 0 : 1;
+    if (aFav !== bFav) return aFav - bFav;
+    return compareFishBySort(a, b, sort, nowUnix, nowEorzea);
+  });
 
   const total = _allFishInfo.length;
   const caughtCount = caught.length;
@@ -2109,16 +2155,30 @@ function renderFishList() {
     return;
   }
 
+  const frag = document.createDocumentFragment();
+  const deferredSpans = [];
   for (const f of filtered) {
     const opts = {
-      caught: caught.includes(f.id),
-      faved: favs.includes(f.id),
+      caught: caughtSet.has(f.id),
+      faved: favSet.has(f.id),
+      deferNextWindow: true,
     };
-    scroll.appendChild(createFishCard(f, opts));
+    const card = createFishCard(f, opts);
+    const span = card.querySelector(".fish-next-deferred");
+    if (span) deferredSpans.push(span);
+    frag.appendChild(card);
   }
+  scroll.appendChild(frag);
+  hydrateFishNextWindows(deferredSpans);
 }
 
 let _fishSearchTimer = null;
+let _fishFilterTimer = null;
+
+function debouncedRenderFishList() {
+  clearTimeout(_fishFilterTimer);
+  _fishFilterTimer = setTimeout(renderFishList, 80);
+}
 
 document.getElementById("fish-list-search").addEventListener("input", () => {
   clearTimeout(_fishSearchTimer);
@@ -2126,15 +2186,15 @@ document.getElementById("fish-list-search").addEventListener("input", () => {
 });
 
 document.getElementById("hide-caught").addEventListener("change", () => {
-  renderFishList();
+  debouncedRenderFishList();
 });
 
 document.getElementById("big-fish-only").addEventListener("change", () => {
-  renderFishList();
+  debouncedRenderFishList();
 });
 
 document.getElementById("fish-list-sort").addEventListener("change", () => {
-  renderFishList();
+  debouncedRenderFishList();
 });
 
 document

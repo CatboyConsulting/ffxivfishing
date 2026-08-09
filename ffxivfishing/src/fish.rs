@@ -104,8 +104,8 @@ struct FishWindowDefinition {
     window_end: EorzeaDuration,
     fish_eyes: bool,
     collectable: bool,
-    previous_weather_set: Vec<Weather>,
-    weather_set: Vec<Weather>,
+    previous_weather_set: Rc<[Weather]>,
+    weather_set: Rc<[Weather]>,
 }
 
 impl FishWindowDefinition {
@@ -205,58 +205,21 @@ impl FishWindowDefinition {
         None
     }
 
-    fn last_window_in(
+    fn last_windows_in(
         &self,
         start: EorzeaTime,
         end: EorzeaTime,
         use_fish_eyes: bool,
-    ) -> Option<EorzeaTimeSpan> {
+    ) -> PrerequisiteWindows {
         if start >= end {
-            return None;
+            return PrerequisiteWindows { with_fish_eyes: None, without_fish_eyes: None };
         }
 
-        let definition = if use_fish_eyes && self.fish_eyes {
-            Self {
-                window_start: EorzeaDuration::from_esecs(0),
-                window_end: EorzeaDuration::from_esecs(0),
-                ..self.clone()
-            }
-        } else {
-            self.clone()
-        };
+        let mut last_without = None;
+        let mut last_with = None;
         let mut time = start;
         let mut limit = INTUITION_SEARCH_LIMIT;
-        let mut last_window = None;
-        while limit > 0 {
-            let window = match definition.next_window(time, true, limit) {
-                Some(window) => window,
-                None => return last_window,
-            };
-            if window.start() < end && window.end() > start {
-                last_window = Some(window.clone());
-            }
-            if window.start() >= end {
-                return last_window;
-            }
 
-            let next_time = window.end();
-            if next_time <= time || next_time >= end {
-                return last_window;
-            }
-            time = next_time;
-            limit -= 1;
-        }
-        last_window
-    }
-
-    fn last_window_in_shared(&self, start: EorzeaTime, end: EorzeaTime) -> Option<EorzeaTimeSpan> {
-        if start >= end {
-            return None;
-        }
-
-        let mut last_window = None;
-        let mut time = start;
-        let mut limit = INTUITION_SEARCH_LIMIT;
         if self.previous_weather_set.is_empty() && self.weather_set.is_empty() {
             while limit > 0 {
                 let window = self.window_on_day(time);
@@ -264,7 +227,15 @@ impl FishWindowDefinition {
                     break;
                 }
                 if window.end() > start {
-                    last_window = Some(window);
+                    last_without = Some(window);
+                }
+                if use_fish_eyes && self.fish_eyes {
+                    let mut fe_day = time;
+                    fe_day.round(EORZEA_SUN);
+                    let fe_span = EorzeaTimeSpan::new(fe_day, EORZEA_SUN);
+                    if fe_span.start() < end && fe_span.end() > start {
+                        last_with = Some(fe_span);
+                    }
                 }
                 time += EORZEA_SUN;
                 limit -= 1;
@@ -276,59 +247,50 @@ impl FishWindowDefinition {
                     &self.previous_weather_set,
                     &self.weather_set,
                     limit,
-                )?;
+                );
+                let next_weather = match next_weather {
+                    Some(nw) => nw,
+                    None => break,
+                };
                 if next_weather >= end {
                     break;
                 }
                 let weather_span = EorzeaTimeSpan::new(next_weather, EORZEA_WEATHER_PERIOD);
-                update_last_window(self, time, &weather_span, start, end, &mut last_window);
+
+                if let Ok(window) = self.window_on_day(time).overlap(&weather_span) {
+                    if window.start() < end && window.end() > start {
+                        last_without = merge_window(last_without, window);
+                    }
+                }
+
+                if use_fish_eyes && self.fish_eyes {
+                    let mut fe_day = time;
+                    fe_day.round(EORZEA_SUN);
+                    let fe_span = EorzeaTimeSpan::new(fe_day, EORZEA_SUN);
+                    if let Ok(window) = fe_span.overlap(&weather_span) {
+                        if window.start() < end && window.end() > start {
+                            last_with = merge_window(last_with, window);
+                        }
+                    }
+                }
+
                 time = next_weather;
                 limit -= 1;
             }
         }
-        last_window
-    }
 
-    fn last_windows_in(
-        &self,
-        start: EorzeaTime,
-        end: EorzeaTime,
-        use_fish_eyes: bool,
-    ) -> PrerequisiteWindows {
-        let without_fish_eyes = self.last_window_in_shared(start, end);
-        let with_fish_eyes = if use_fish_eyes {
-            self.last_window_in(start, end, true)
-        } else {
-            without_fish_eyes.clone()
-        };
-        PrerequisiteWindows {
-            with_fish_eyes,
-            without_fish_eyes,
-        }
+        let with_fish_eyes = if use_fish_eyes { last_with } else { last_without };
+        PrerequisiteWindows { with_fish_eyes, without_fish_eyes: last_without }
     }
 }
 
-fn update_last_window(
-    definition: &FishWindowDefinition,
-    time: EorzeaTime,
-    weather_span: &EorzeaTimeSpan,
-    start: EorzeaTime,
-    end: EorzeaTime,
-    last_window: &mut Option<EorzeaTimeSpan>,
-) {
-    let Ok(window) = definition.window_on_day(time).overlap(weather_span) else {
-        return;
-    };
-    if window.start() >= end || window.end() <= start {
-        return;
-    }
-
-    *last_window = match last_window.take() {
-        Some(previous) if window.start() == previous.end() => {
-            EorzeaTimeSpan::new_start_end(previous.start(), window.end()).ok()
+fn merge_window(last: Option<EorzeaTimeSpan>, current: EorzeaTimeSpan) -> Option<EorzeaTimeSpan> {
+    match last {
+        Some(prev) if current.start() == prev.end() => {
+            EorzeaTimeSpan::new_start_end(prev.start(), current.end()).ok()
         }
-        _ => Some(window),
-    };
+        _ => Some(current),
+    }
 }
 
 #[derive(Debug)]
@@ -383,8 +345,8 @@ pub struct Fish {
     pub window_start: EorzeaDuration,
     pub window_end: EorzeaDuration,
     pub bait: Bait,
-    pub previous_weather_set: Vec<Weather>,
-    pub weather_set: Vec<Weather>,
+    pub previous_weather_set: Rc<[Weather]>,
+    pub weather_set: Rc<[Weather]>,
     pub tug: Tug,
     pub hookset: Hookset,
     pub intuition: Option<Intuition>,
@@ -513,7 +475,7 @@ fn intuition_window_for_prerequisites(
 
     let last_prerequisite = match last_prerequisite {
         Some(last_prerequisite) => last_prerequisite,
-        None => return Some(window.clone()),
+        None => return Some(*window),
     };
     intuition_window_from_last_prerequisite(window, intuition_length, Some(last_prerequisite))
 }
@@ -588,7 +550,7 @@ fn fish_eyes_required_for_prerequisites(
                 _ => Some(without_fish_eyes),
             };
             intuition_window_from_last_prerequisite(window, intuition_length, replacement)
-                != Some(intuition_window.clone())
+                != Some(*intuition_window)
         })
         .collect()
 }
@@ -627,8 +589,8 @@ impl Fish {
             window_start: window_start % EORZEA_SUN,
             window_end: window_end % EORZEA_SUN,
             bait,
-            previous_weather_set,
-            weather_set,
+            previous_weather_set: Rc::from(previous_weather_set),
+            weather_set: Rc::from(weather_set),
             tug,
             hookset,
             intuition,
@@ -787,8 +749,8 @@ impl Fish {
             },
             fish_eyes: self.fish_eyes,
             collectable: self.collectable,
-            previous_weather_set: self.previous_weather_set.clone(),
-            weather_set: self.weather_set.clone(),
+            previous_weather_set: Rc::clone(&self.previous_weather_set),
+            weather_set: Rc::clone(&self.weather_set),
         }
     }
 
@@ -821,11 +783,11 @@ impl Fish {
     ) -> Option<(EorzeaTimeSpan, Vec<IntuitionWindowSetup>)> {
         let intuition = match &self.intuition {
             Some(intuition) => intuition,
-            None => return Some((window.clone(), Vec::new())),
+            None => return Some((*window, Vec::new())),
         };
         let intuition_length = match intuition.length_eorzea() {
             Some(length) => length,
-            None => return Some((window.clone(), Vec::new())),
+            None => return Some((*window, Vec::new())),
         };
         let resolved_requirements = if let Some(requirements) = &intuition.resolved_requirements {
             requirements
@@ -850,7 +812,7 @@ impl Fish {
             let prerequisite_window = if use_fish_eyes {
                 windows.with_fish_eyes?
             } else {
-                without_fish_eyes.clone()?
+                without_fish_eyes?
             };
             prerequisite_calculations.push(IntuitionPrerequisiteCalculation {
                 amount: *amount,
@@ -882,12 +844,11 @@ impl Fish {
                 amount: prerequisite.amount,
                 fish: prerequisite.fish,
                 window: if fish_eyes {
-                    prerequisite.window.clone()
+                    prerequisite.window
                 } else {
                     prerequisite
                         .without_fish_eyes
-                        .clone()
-                        .unwrap_or_else(|| prerequisite.window.clone())
+                        .unwrap_or(prerequisite.window)
                 },
                 fish_eyes,
             })
@@ -1062,8 +1023,8 @@ impl FishData {
                                     window_end: EorzeaDuration::from_esecs(0),
                                     fish_eyes: false,
                                     collectable: false,
-                                    previous_weather_set: vec![],
-                                    weather_set: vec![],
+                                    previous_weather_set: Rc::from([]),
+                                    weather_set: Rc::from([]),
                                 }
                             });
                             (*count, Some(definition))
@@ -1144,8 +1105,8 @@ mod tests {
             window_start: EorzeaDuration::new(1, 0, 0).unwrap(),
             window_end: EorzeaDuration::new(2, 0, 0).unwrap(),
             bait: Bait::Bait(0),
-            previous_weather_set: vec![Weather::Clouds],
-            weather_set: vec![Weather::Clouds],
+            previous_weather_set: Rc::from(vec![Weather::Clouds]),
+            weather_set: Rc::from(vec![Weather::Clouds]),
             tug: Tug::Light,
             hookset: Hookset::Precision,
             intuition: None,
@@ -1253,8 +1214,8 @@ mod tests {
             window_start: EorzeaDuration::new(7, 30, 0).unwrap(),
             window_end: EorzeaDuration::new(8, 30, 0).unwrap(),
             bait: Bait::Bait(0),
-            previous_weather_set: vec![Weather::Clouds],
-            weather_set: vec![Weather::Clouds],
+            previous_weather_set: Rc::from(vec![Weather::Clouds]),
+            weather_set: Rc::from(vec![Weather::Clouds]),
             tug: Tug::Light,
             hookset: Hookset::Precision,
             snagging: false,
@@ -1349,8 +1310,8 @@ mod tests {
             window_start: EorzeaDuration::new(23, 30, 0).unwrap(),
             window_end: EorzeaDuration::new(1, 0, 0).unwrap(),
             bait: Bait::Bait(0),
-            previous_weather_set: vec![Weather::Clouds],
-            weather_set: vec![Weather::Clouds],
+            previous_weather_set: Rc::from(vec![Weather::Clouds]),
+            weather_set: Rc::from(vec![Weather::Clouds]),
             tug: Tug::Light,
             hookset: Hookset::Precision,
             snagging: false,

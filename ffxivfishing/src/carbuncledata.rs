@@ -365,7 +365,7 @@ pub fn carbuncle_fishes() -> Result<FishData, Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
 
-    use std::time::SystemTime;
+    use std::time::{Instant, SystemTime};
 
     use crate::{
         eorzea_time::{EORZEA_SUN, EorzeaTime},
@@ -538,4 +538,5 @@ mod tests {
         let mooching_fish = data.fish_by_id(4904).unwrap();
         assert_eq!(mooching_fish.mooch_id(), Some(4869));
     }
+
 }

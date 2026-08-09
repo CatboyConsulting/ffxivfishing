@@ -641,6 +641,8 @@ td {
   gap: 0.5rem;
   cursor: default;
   font-size: 0.9rem;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 54px;
 }
 
 .fish-item:hover {

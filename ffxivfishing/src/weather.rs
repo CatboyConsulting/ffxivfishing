@@ -1,8 +1,6 @@
-use std::time::{SystemTimeError, UNIX_EPOCH};
-
 use crate::eorzea_time::{EORZEA_WEATHER_PERIOD, EorzeaTime};
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Weather {
     Unknown,
     Id(u32),
@@ -18,31 +16,30 @@ pub enum Weather {
 pub struct WeatherForecast {
     region: String,
     weather_rates: Vec<(u8, Weather)>,
+    max_score: u8,
 }
 
 impl WeatherForecast {
     pub fn new(region: String, mut weather_rates: Vec<(u8, Weather)>) -> WeatherForecast {
         weather_rates.sort_by_key(|(n, _)| *n);
+        let max_score = weather_rates
+            .last()
+            .map(|(n, _)| *n)
+            .unwrap_or(1);
         WeatherForecast {
             region,
             weather_rates,
+            max_score,
         }
     }
     pub fn weather_at(&self, time: EorzeaTime) -> &Weather {
-        let max_score = self
-            .weather_rates
-            .iter()
-            .map(|(n, _)| n)
-            .max()
-            .unwrap_or(&1u8);
-
-        let weather_score = eorzea_weather_score(time, *max_score).unwrap_or(1);
-        self.weather_rates
-            .iter()
-            .filter(|(n, _)| *n > weather_score)
-            .map(|(_, w)| w)
-            .next()
-            .unwrap_or(&Weather::Unknown)
+        let weather_score = eorzea_weather_score(time, self.max_score);
+        for (rate, weather) in &self.weather_rates {
+            if *rate > weather_score {
+                return weather;
+            }
+        }
+        &Weather::Unknown
     }
 
     pub fn region(&self) -> &str {
@@ -127,15 +124,16 @@ impl WeatherForecast {
     }
 }
 
-fn eorzea_weather_score(time: EorzeaTime, max_score: u8) -> Result<u8, SystemTimeError> {
-    let unix_time_sec = time.to_system_time().duration_since(UNIX_EPOCH)?.as_secs();
+fn eorzea_weather_score(time: EorzeaTime, max_score: u8) -> u8 {
+    let timestamp = time.as_esecs();
+    let unix_time_sec = (timestamp * 175 + 1800) / 3600;
     let bell = unix_time_sec / 175;
     let inc = (bell + 8 - (bell % 8)) % 24;
     let total_days = unix_time_sec / 4200;
     let calc_base: u32 = ((total_days * 100) + inc) as u32;
     let step_1: u32 = (calc_base << 11) ^ calc_base;
     let step_2: u32 = (step_1 >> 8) ^ step_1;
-    Ok((step_2 % (max_score as u32)) as u8)
+    (step_2 % (max_score as u32)) as u8
 }
 
 #[cfg(test)]
@@ -145,23 +143,23 @@ mod tests {
 
     #[test]
     fn eorzea_time_conversion() {
-        let result = eorzea_weather_score(EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(), 100).unwrap();
+        let result = eorzea_weather_score(EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(), 100);
         assert_eq!(result, 56);
         let result2 =
-            eorzea_weather_score(EorzeaTime::new(1, 1, 24, 19, 25, 43).unwrap(), 100).unwrap();
+            eorzea_weather_score(EorzeaTime::new(1, 1, 24, 19, 25, 43).unwrap(), 100);
         assert_eq!(result2, 76);
 
         let result3 =
-            eorzea_weather_score(EorzeaTime::new(2, 1, 1, 0, 0, 0).unwrap(), 100).unwrap();
+            eorzea_weather_score(EorzeaTime::new(2, 1, 1, 0, 0, 0).unwrap(), 100);
         assert_eq!(result3, 78);
     }
 
     #[test]
     fn pattern_search() {
-        let forecast = WeatherForecast {
-            region: "".to_string(),
-            weather_rates: vec![(50, Weather::Clouds), (100, Weather::Sunny)],
-        };
+        let forecast = WeatherForecast::new(
+            "".to_string(),
+            vec![(50, Weather::Clouds), (100, Weather::Sunny)],
+        );
         let weather_vec = vec![Weather::Sunny];
         let result = forecast.find_pattern(
             EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
@@ -182,16 +180,16 @@ mod tests {
     }
     #[test]
     fn weather_at_real() {
-        let forecast = WeatherForecast {
-            region: "".to_string(),
-            weather_rates: vec![
+        let forecast = WeatherForecast::new(
+            "".to_string(),
+            vec![
                 (20, Weather::Clouds),
                 (50, Weather::ClearSkies),
                 (80, Weather::FairSkies),
                 (90, Weather::Fog),
                 (100, Weather::Wind),
             ],
-        };
+        );
         assert_eq!(
             forecast.weather_at(EorzeaTime::from_esecs(100_000)),
             &Weather::FairSkies
