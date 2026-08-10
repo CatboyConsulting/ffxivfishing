@@ -28,7 +28,14 @@ const DAY_OPTIONS = [
 ];
 const FILTER_INTUITION = true;
 
-let _savedOpen = true;
+let _savedOpen = (() => {
+  try {
+    const raw = localStorage.getItem("savedWindowsOpen");
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+  } catch {}
+  return false;
+})();
 
 let _lastWindows = [];
 let _lastFishName = "";
@@ -137,6 +144,22 @@ function fmtSavedWhen(startUnix, endUnix, nowUnix) {
 
 function isAlwaysUp(fish) {
   return Number.isFinite(fish.fishUptime) && fish.fishUptime >= 1;
+}
+
+function computeEffectiveAlwaysUp(f, allFishInfo) {
+  if (!isAlwaysUp(f)) return false;
+  if (f.moochPath?.length && f.baitId != null) {
+    const moochFish = allFishInfo.find((fi) => fi.id === f.baitId);
+    if (moochFish && !isAlwaysUp(moochFish)) return false;
+  }
+  if (f.intuitionRequirements?.length) {
+    for (const req of f.intuitionRequirements) {
+      if (req.fishId == null) return false;
+      const prereqFish = allFishInfo.find((fi) => fi.id === req.fishId);
+      if (prereqFish && !isAlwaysUp(prereqFish)) return false;
+    }
+  }
+  return true;
 }
 
 function isPrerequisiteAlwaysUp(prerequisite) {
@@ -371,6 +394,8 @@ async function query(formData, trigger) {
     updateResultsNote();
 
     let windowFishId = formData.fishId;
+
+    let moochAlwaysUp = false;
     if (
       isAlwaysUp(fishInfo) &&
       fishInfo.moochPath?.length &&
@@ -381,16 +406,44 @@ async function query(formData, trigger) {
         if (queryGeneration !== _queryGeneration) return;
         if (!isAlwaysUp(moochFishInfo)) {
           windowFishId = moochFishInfo.id;
+        } else {
+          moochAlwaysUp = true;
         }
       } catch (err) {
         if (!String(err).includes("Fish not found")) throw err;
+        moochAlwaysUp = true;
       }
     }
 
+    let intuitionAlwaysUp = false;
+    if (isAlwaysUp(fishInfo) && fishInfo.intuitionRequirements?.length) {
+      const prereqs = fishInfo.intuitionRequirements;
+      let allAlwaysUp = true;
+      for (const req of prereqs) {
+        if (req.fishId == null) {
+          allAlwaysUp = false;
+          break;
+        }
+        try {
+          const prereqInfo = JSON.parse(await get_fish(req.fishId));
+          if (queryGeneration !== _queryGeneration) return;
+          if (!isAlwaysUp(prereqInfo)) {
+            allAlwaysUp = false;
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+      intuitionAlwaysUp = allAlwaysUp;
+    }
+
     const alwaysUp =
-      isAlwaysUp(fishInfo) &&
-      !fishInfo.intuitionRequirements?.length &&
-      !fishInfo.moochPath?.length;
+      (isAlwaysUp(fishInfo) &&
+        !fishInfo.intuitionRequirements?.length &&
+        !fishInfo.moochPath?.length) ||
+      moochAlwaysUp ||
+      intuitionAlwaysUp;
     if (alwaysUp) {
       _lastWindows = [];
       elStatus.textContent = "Fish is always up.";
@@ -1422,7 +1475,7 @@ function startFishListTimer() {
   if (_fishListTimerId) {
     clearInterval(_fishListTimerId);
   }
-  _fishListTimerId = setInterval(renderFishList, 15 * 60 * 1000);
+  _fishListTimerId = setInterval(renderFishList, 60 * 1000);
 }
 
 function updateSaveButtons() {
@@ -1755,6 +1808,13 @@ async function main() {
   const formData = getFormData();
   populateForm(formData);
 
+  if (_savedOpen) {
+    const toggle = document.getElementById("saved-toggle");
+    toggle.classList.remove("collapsed");
+    toggle.setAttribute("aria-expanded", "true");
+    document.getElementById("saved-content").style.display = "";
+  }
+
   const elStatus = document.getElementById("status");
   try {
     elStatus.textContent = "Initializing WASM...";
@@ -1768,6 +1828,9 @@ async function main() {
     try {
       const raw = await list_all_fish_info();
       _allFishInfo = JSON.parse(raw);
+      for (const f of _allFishInfo) {
+        f._effectiveAlwaysUp = computeEffectiveAlwaysUp(f, _allFishInfo);
+      }
       renderSavedWindows();
     } catch { }
     renderFishList();
@@ -1781,9 +1844,12 @@ async function main() {
 document.getElementById("add-schedule").addEventListener("click", () => {
   const container = document.getElementById("schedule-rows");
   container.appendChild(createScheduleRow({ startSec: 0, endSec: 86400 }));
+  debouncedApplyConfig();
 });
 
-document.getElementById("apply-btn").addEventListener("click", () => {
+let _configApplyTimer = null;
+
+function applyConfig() {
   const p = readForm();
   if (p.schedule.length === 0) {
     p.schedule.push({ startSec: 0, endSec: 86400 });
@@ -1791,6 +1857,28 @@ document.getElementById("apply-btn").addEventListener("click", () => {
   saveSearch(p);
   _nextWindowCache.clear();
   renderFishList();
+  startNotificationTimer();
+}
+
+function debouncedApplyConfig() {
+  clearTimeout(_configApplyTimer);
+  _configApplyTimer = setTimeout(applyConfig, 300);
+}
+
+document.getElementById("config").addEventListener("change", (e) => {
+  if (e.target.closest("#notification-settings")) return;
+  debouncedApplyConfig();
+});
+
+document.getElementById("config").addEventListener("input", (e) => {
+  if (e.target.closest("#notification-settings")) return;
+  debouncedApplyConfig();
+});
+
+document.getElementById("schedule-rows").addEventListener("click", (e) => {
+  if (e.target.closest(".remove-btn")) {
+    debouncedApplyConfig();
+  }
 });
 
 document
@@ -1839,6 +1927,7 @@ document.getElementById("saved-toggle").addEventListener("click", function () {
     : "none";
   this.classList.toggle("collapsed", !_savedOpen);
   this.setAttribute("aria-expanded", String(_savedOpen));
+  try { localStorage.setItem("savedWindowsOpen", String(_savedOpen)); } catch {}
 });
 
 document.getElementById("results").addEventListener("click", (e) => {
@@ -1948,7 +2037,9 @@ function createFishCard(f, opts = {}) {
   let nextStr = "";
   const hasConditionalAvailability =
     f.intuitionRequirements?.length || f.moochPath?.length;
-  const alwaysUp = isAlwaysUp(f) && !hasConditionalAvailability;
+  const alwaysUp =
+    f._effectiveAlwaysUp === true ||
+    (isAlwaysUp(f) && !hasConditionalAvailability);
   if (alwaysUp) {
     nextStr = '<span class="fish-next-window">always up</span>';
   } else if (opts.deferNextWindow) {
@@ -2301,6 +2392,29 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && _spotPopup) {
     closeSpotPopup();
   }
+});
+
+// ---- scroll to top ----
+
+const scrollTopBtn = document.getElementById("fish-list-scroll-top");
+const fishScroll = document.getElementById("fish-list-scroll");
+
+function handleScroll() {
+  const scrolled = fishScroll.scrollTop > 300 || window.scrollY > 300;
+  if (scrolled) {
+    scrollTopBtn.removeAttribute("hidden");
+  } else {
+    scrollTopBtn.setAttribute("hidden", "");
+  }
+}
+
+fishScroll.addEventListener("scroll", handleScroll, { passive: true });
+document.addEventListener("scroll", handleScroll, { passive: true });
+
+scrollTopBtn.addEventListener("click", () => {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  fishScroll.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
 });
 
 initializeNotificationControls();

@@ -18,11 +18,11 @@
 
     <!-- saved windows (collapsible) -->
     <div class="saved-windows-section group-box">
-      <button type="button" class="config-toggle" id="saved-toggle" aria-expanded="true" aria-controls="saved-content">
+      <button type="button" class="config-toggle collapsed" id="saved-toggle" aria-expanded="false" aria-controls="saved-content">
         <span class="toggle-arrow">&#9660;</span>
         <span>Saved Windows <span id="saved-count"></span></span>
       </button>
-      <div id="saved-content">
+      <div id="saved-content" style="display: none">
         <div id="saved-windows-list"></div>
         <div id="saved-window-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         </div>
@@ -90,10 +90,6 @@
             <div id="schedule-rows"></div>
             <button type="button" id="add-schedule">+ Add schedule</button>
           </fieldset>
-
-          <button type="button" id="apply-btn" class="btn-primary" style="margin-top: 0.5rem">
-            Apply
-          </button>
         </form>
       </div>
     </div>
@@ -147,6 +143,8 @@
     <button type="button" id="import-export-open" class="btn-primary" style="margin-top: 0.5rem">
       Import/Export
     </button>
+
+    <button type="button" id="fish-list-scroll-top" class="scroll-top-btn" title="Scroll to top" aria-label="Scroll to top" hidden>&#9650;</button>
 
     <!-- results side panel -->
     <div class="results-overlay" id="results-overlay" aria-hidden="true"></div>

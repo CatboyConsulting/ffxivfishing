@@ -18,6 +18,7 @@ thread_local! {
 #[serde(rename_all = "camelCase")]
 struct IntuitionRequirementInfo {
     amount: u8,
+    fish_id: u32,
     fish: String,
 }
 
@@ -158,6 +159,7 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
         .iter()
         .map(|(amount, id)| IntuitionRequirementInfo {
             amount: *amount,
+            fish_id: *id,
             fish: item_name(*id),
         })
         .collect();
@@ -466,9 +468,9 @@ mod tests {
         assert_eq!(
             warden_json["intuitionRequirements"],
             serde_json::json!([
-                {"amount": 3, "fish": "Indigo Prismfish"},
-                {"amount": 3, "fish": "Firelight Goldfish"},
-                {"amount": 5, "fish": "Green Prismfish"}
+                {"amount": 3, "fishId": 24203, "fish": "Indigo Prismfish"},
+                {"amount": 3, "fishId": 23056, "fish": "Firelight Goldfish"},
+                {"amount": 5, "fishId": 24204, "fish": "Green Prismfish"}
             ])
         );
         assert_eq!(warden_json["intuitionLengthSeconds"], 175);
