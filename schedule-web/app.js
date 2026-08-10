@@ -1878,6 +1878,64 @@ function toggleCaught(id) {
   renderFishList();
 }
 
+const SPOT_LINK_TARGETS = [
+  {
+    name: "FishStats",
+    domain: "lodinn.github.io",
+    icon: "https://lodinn.github.io/favicon.ico",
+    getUrl: (spot) =>
+      `https://lodinn.github.io/biterates?spot=${encodeURIComponent(spot.name)}`,
+  },
+  {
+    name: "Teamcraft",
+    domain: "ffxivteamcraft.com",
+    icon: "https://ffxivteamcraft.com/favicon.ico",
+    getUrl: (spot) =>
+      `https://ffxivteamcraft.com/db/en/fishing-spot/${spot.id}/${kebab(spot.name)}`,
+  },
+];
+
+let _spotPopup = null;
+let _spotPopupTrigger = null;
+
+function ensureSpotPopup() {
+  if (_spotPopup) return;
+  _spotPopup = document.createElement("div");
+  _spotPopup.className = "spot-popup";
+  _spotPopup.setAttribute("role", "menu");
+  _spotPopup.style.display = "none";
+  document.body.appendChild(_spotPopup);
+}
+
+function showSpotPopup(spot, triggerEl) {
+  ensureSpotPopup();
+  _spotPopupTrigger = triggerEl;
+  _spotPopup.innerHTML = SPOT_LINK_TARGETS.map((t) => {
+    return `<button type="button" class="spot-popup-item" role="menuitem" data-url="${escapeHtml(t.getUrl(spot))}">
+      <img src="${escapeHtml(t.icon)}" alt="" width="16" height="16" class="spot-popup-icon" />
+      <span class="spot-popup-name">${escapeHtml(t.name)}</span>
+      <span class="spot-popup-domain">${escapeHtml(t.domain)}</span>
+    </button>`;
+  }).join("");
+  _spotPopup.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      globalThis.open(btn.dataset.url, "_blank", "noopener");
+      closeSpotPopup();
+    });
+  });
+  const rect = triggerEl.getBoundingClientRect();
+  _spotPopup.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  _spotPopup.style.left = `${rect.left + window.scrollX}px`;
+  _spotPopup.style.display = "block";
+}
+
+function closeSpotPopup() {
+  if (_spotPopup) {
+    _spotPopup.style.display = "none";
+  }
+  _spotPopupTrigger = null;
+}
+
 function createFishCard(f, opts = {}) {
   const div = document.createElement("div");
   div.className = "fish-item" + (opts.caught ? " caught" : "");
@@ -1967,7 +2025,7 @@ function createFishCard(f, opts = {}) {
       <button type="button" class="fav-star${isFaved ? " faved" : ""}" data-fish-id="${f.id}" aria-label="${isFaved ? "Remove fish from favourites" : "Add fish to favourites"}">${isFaved ? "&#9829;" : "&#9825;"}</button>
       <div class="fish-body" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(f.name)}">
         <span class="fish-name truncate">${escapeHtml(displayName)}${hasNote ? `<span class="fish-note-indicator" data-fish-id="${f.id}" title="Has note">&#128221;</span>` : ""} ${nextStr}</span>
-        <span class="fish-meta truncate">${escapeHtml(f.location)} | ${escapeHtml(f.region)} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ${escapeHtml(windowDisplay)}</span>
+        <span class="fish-meta truncate"><span class="spot-link" role="button" tabindex="0">${escapeHtml(f.spot.name)}</span> | ${escapeHtml(f.region)} | ${escapeHtml(f.patch)} | ${escapeHtml(weatherStr)}${escapeHtml(uptimeStr)} | ${escapeHtml(windowDisplay)}</span>
         ${requirementsHtml}
       </div>
     `;
@@ -1992,6 +2050,20 @@ function createFishCard(f, opts = {}) {
       elStatus.textContent = `Error: ${err}`;
     });
   };
+  const spotLink = fishBody.querySelector(".spot-link");
+  if (spotLink) {
+    spotLink.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showSpotPopup(f.spot, spotLink);
+    });
+    spotLink.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        e.stopPropagation();
+        showSpotPopup(f.spot, spotLink);
+      }
+    });
+  }
   fishBody.addEventListener("click", selectFish);
   fishBody.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -2105,7 +2177,7 @@ function renderFishList() {
         filtered = filtered.filter(
           (f) =>
             f.region.toLowerCase().includes(zoneQ) ||
-            f.location.toLowerCase().includes(zoneQ),
+            f.spot.name.toLowerCase().includes(zoneQ),
         );
       } else if (pq.startsWith("patch:")) {
         const patchQ = pq.slice(6);
@@ -2219,6 +2291,15 @@ document.addEventListener("click", (e) => {
     document
       .getElementById("filter-help")
       .setAttribute("aria-expanded", "false");
+  }
+  if (_spotPopup && !e.target.closest(".spot-popup") && !e.target.closest(".spot-link")) {
+    closeSpotPopup();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && _spotPopup) {
+    closeSpotPopup();
   }
 });
 

@@ -23,10 +23,17 @@ struct IntuitionRequirementInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SpotInfo {
+    id: u32,
+    name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct FishInfo {
     id: u32,
     name: String,
-    location: String,
+    spot: SpotInfo,
     region: String,
     tug: String,
     hookset: String,
@@ -166,7 +173,10 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     FishInfo {
         id: fish.id,
         name: fish.name.clone(),
-        location: fish.location.name().to_string(),
+        spot: SpotInfo {
+            id: fish.location.id(),
+            name: fish.location.name().to_string(),
+        },
         region: fish.location.region().name().to_string(),
         tug: fish.tug.to_string(),
         hookset: fish.hookset.to_string(),

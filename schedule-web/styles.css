@@ -1141,3 +1141,54 @@ footer {
     overflow-wrap: anywhere;
   }
 }
+
+/* ---- spot link popup ---- */
+.spot-link {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.spot-popup {
+  position: absolute;
+  z-index: 300;
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-border);
+  border-radius: 6px;
+  padding: 0.375rem 0;
+  min-width: 260px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.spot-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.875rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.spot-popup-item:hover,
+.spot-popup-item:focus {
+  background: var(--bg-medium);
+}
+
+.spot-popup-icon {
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.spot-popup-name {
+  font-weight: 600;
+}
+
+.spot-popup-domain {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}

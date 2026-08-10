@@ -1,0 +1,15 @@
+{
+  "name": "ffxivfishing-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "ffxivfishing_wasm_bg.wasm",
+    "ffxivfishing_wasm.js",
+    "ffxivfishing_wasm.d.ts"
+  ],
+  "main": "ffxivfishing_wasm.js",
+  "types": "ffxivfishing_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
