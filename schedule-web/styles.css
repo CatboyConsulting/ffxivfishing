@@ -476,6 +476,12 @@ td {
   width: 5rem;
 }
 
+.sound-settings {
+  border: 1px solid var(--bg-border);
+  padding: 0.5rem 0.75rem 0.75rem;
+  margin: 0;
+}
+
 .notification-status {
   margin: 0;
   color: var(--text-muted);

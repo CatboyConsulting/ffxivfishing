@@ -198,45 +198,55 @@ function etClock(unix) {
   return String(bell).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
 }
 
-const STORAGE_KEY = "lastSearch";
+const CONFIG_KEY = "config";
 
-function saveSearch(p) {
+function getStoredConfig() {
+  let cfg = null;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
+  } catch { }
+  return cfg && typeof cfg === "object" && !Array.isArray(cfg) ? cfg : {};
+}
+
+function setStoredConfig(cfg) {
+  try {
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   } catch { }
 }
 
+function saveSearch(p) {
+  const cfg = getStoredConfig();
+  cfg.search = p;
+  setStoredConfig(cfg);
+}
+
 function restoreSearch() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    const validSchedule = (entry) =>
-      entry &&
-      Number.isFinite(entry.startSec) &&
-      Number.isFinite(entry.endSec) &&
-      entry.startSec >= 0 &&
-      entry.startSec <= 86400 &&
-      entry.endSec >= 0 &&
-      entry.endSec <= 86400 &&
-      (entry.dayOfWeek === undefined ||
-        (Number.isInteger(entry.dayOfWeek) &&
-          entry.dayOfWeek >= 0 &&
-          entry.dayOfWeek <= 6));
-    if (
-      p &&
-      typeof p.fishId === "number" &&
-      Array.isArray(p.schedule) &&
-      p.schedule.every(validSchedule) &&
-      typeof p.days === "number" &&
-      Number.isFinite(p.days) &&
-      (p.limit === undefined ||
-        (typeof p.limit === "number" && Number.isFinite(p.limit))) &&
-      (p.useFishEyes === undefined || typeof p.useFishEyes === "boolean")
-    ) {
-      return p;
-    }
-  } catch { }
+  const p = getStoredConfig().search;
+  if (!p) return null;
+  const validSchedule = (entry) =>
+    entry &&
+    Number.isFinite(entry.startSec) &&
+    Number.isFinite(entry.endSec) &&
+    entry.startSec >= 0 &&
+    entry.startSec <= 86400 &&
+    entry.endSec >= 0 &&
+    entry.endSec <= 86400 &&
+    (entry.dayOfWeek === undefined ||
+      (Number.isInteger(entry.dayOfWeek) &&
+        entry.dayOfWeek >= 0 &&
+        entry.dayOfWeek <= 6));
+  if (
+    typeof p.fishId === "number" &&
+    Array.isArray(p.schedule) &&
+    p.schedule.every(validSchedule) &&
+    typeof p.days === "number" &&
+    Number.isFinite(p.days) &&
+    (p.limit === undefined ||
+      (typeof p.limit === "number" && Number.isFinite(p.limit))) &&
+    (p.useFishEyes === undefined || typeof p.useFishEyes === "boolean")
+  ) {
+    return p;
+  }
   return null;
 }
 
@@ -774,6 +784,7 @@ function applyLocalStorageImport(raw) {
   populateForm(getFormData());
   renderSavedWindows();
   initializeNotificationControls();
+  initializeSoundControls();
   startSavedWindowTimer();
   startNotificationTimer();
   renderFishList();
@@ -781,7 +792,6 @@ function applyLocalStorageImport(raw) {
 }
 
 const SAVED_WINDOWS_KEY = "savedWindows";
-const NOTIFICATION_SETTINGS_KEY = "notificationSettings";
 const DEFAULT_NOTIFICATION_MINUTES = 15;
 const MAX_NOTIFICATION_MINUTES = 1440;
 
@@ -882,13 +892,7 @@ function canConfigureNotifications() {
 }
 
 function getNotificationSettings() {
-  let settings = null;
-  try {
-    settings = JSON.parse(
-      localStorage.getItem(NOTIFICATION_SETTINGS_KEY) || "null",
-    );
-  } catch { }
-
+  const settings = getStoredConfig().notifications;
   const minutes = Number(settings?.minutesBefore);
   return {
     enabled: settings?.enabled === true,
@@ -901,9 +905,9 @@ function getNotificationSettings() {
 }
 
 function saveNotificationSettings(settings) {
-  try {
-    localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
-  } catch { }
+  const cfg = getStoredConfig();
+  cfg.notifications = settings;
+  setStoredConfig(cfg);
 }
 
 function setNotificationStatus(message, type = "") {
@@ -1164,6 +1168,92 @@ function handleGoogleCalendarToggle() {
   const settings = getNotificationSettings();
   settings.googleCalendar = checkbox.checked;
   saveNotificationSettings(settings);
+}
+
+// ---- Window Sounds ----
+
+function getSoundSettings() {
+  return { enabled: getStoredConfig().sounds?.enabled === true };
+}
+
+function saveSoundSettings(settings) {
+  const cfg = getStoredConfig();
+  cfg.sounds = settings;
+  setStoredConfig(cfg);
+}
+
+let _audioCtx = null;
+
+function getAudioContext() {
+  if (_audioCtx) return _audioCtx;
+  const AudioContextCtor =
+    window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return null;
+  _audioCtx = new AudioContextCtor();
+  return _audioCtx;
+}
+
+function tone(ctx, start, freq, duration, type = "sine", gain = 0.3, freqEnd) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, start);
+  if (freqEnd) {
+    osc.frequency.exponentialRampToValueAtTime(freqEnd, start + duration);
+  }
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(gain, start + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(g);
+  g.connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+}
+
+const SOUNDS = {
+  chime: (ctx, t) => {
+    tone(ctx, t, 660, 0.18, "sine", 0.28);
+    tone(ctx, t + 0.14, 990, 0.24, "sine", 0.28);
+  },
+  chirp: (ctx, t) => tone(ctx, t, 440, 0.28, "sine", 0.28, 1320),
+};
+
+function playSound(name) {
+  const play = SOUNDS[name];
+  if (!play) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => { });
+  }
+  play(ctx, ctx.currentTime + 0.02);
+}
+
+function playWindowStartSound() {
+  const settings = getSoundSettings();
+  if (!settings.enabled) return;
+  playSound("chime");
+}
+
+function playWindowEndSound() {
+  const settings = getSoundSettings();
+  if (!settings.enabled) return;
+  playSound("chirp");
+}
+
+function initializeSoundControls() {
+  const checkbox = document.getElementById("enable-sounds");
+  if (!checkbox) return;
+  checkbox.checked = getSoundSettings().enabled;
+}
+
+function handleSoundToggle() {
+  const checkbox = document.getElementById("enable-sounds");
+  if (!checkbox) return;
+  const settings = getSoundSettings();
+  settings.enabled = checkbox.checked;
+  saveSoundSettings(settings);
+  if (settings.enabled) playSound("chime");
 }
 
 function windowKey(w) {
@@ -1438,6 +1528,8 @@ function updateSavedWindowProgress(div, nowUnix, state) {
 function updateSavedWindowTimers() {
   const nowUnix = Math.floor(Date.now() / 1000);
   const announcements = [];
+  let windowStarted = false;
+  let windowEnded = false;
   document
     .querySelectorAll("#saved-windows-list .saved-item")
     .forEach((div) => {
@@ -1451,6 +1543,8 @@ function updateSavedWindowTimers() {
       div.dataset.state = state;
       if (previousState && previousState !== state) {
         const fishName = div.dataset.fishName || "Saved fish";
+        if (state === "ongoing") windowStarted = true;
+        else if (state === "past") windowEnded = true;
         announcements.push(
           state === "ongoing"
             ? `${fishName} window is active, ${displayWhen}.`
@@ -1464,6 +1558,8 @@ function updateSavedWindowTimers() {
     document.getElementById("saved-window-announcer").textContent =
       announcements.join(" ");
   }
+  if (windowStarted) playWindowStartSound();
+  if (windowEnded) playWindowEndSound();
 }
 
 const INTUITION_UPDATE_INTERVAL_MS = 5000;
@@ -1913,12 +2009,20 @@ function debouncedApplyConfig() {
 }
 
 document.getElementById("config").addEventListener("change", (e) => {
-  if (e.target.closest("#notification-settings")) return;
+  if (
+    e.target.closest("#notification-settings") ||
+    e.target.closest("#sound-settings")
+  )
+    return;
   debouncedApplyConfig();
 });
 
 document.getElementById("config").addEventListener("input", (e) => {
-  if (e.target.closest("#notification-settings")) return;
+  if (
+    e.target.closest("#notification-settings") ||
+    e.target.closest("#sound-settings")
+  )
+    return;
   debouncedApplyConfig();
 });
 
@@ -1940,6 +2044,9 @@ document
 document
   .getElementById("export-google-calendar")
   .addEventListener("change", handleGoogleCalendarToggle);
+document
+  .getElementById("enable-sounds")
+  .addEventListener("change", handleSoundToggle);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     updateNotificationAvailability();
@@ -2480,4 +2587,5 @@ document.querySelectorAll(".bottom-nav .nav-btn").forEach((btn) => {
 setMobileView("fish");
 
 initializeNotificationControls();
+initializeSoundControls();
 main();
