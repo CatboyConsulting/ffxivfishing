@@ -156,8 +156,8 @@ function computeEffectiveAlwaysUp(f, allFishInfo) {
 function isPrerequisiteAlwaysUp(prerequisite) {
   return (
     !!prerequisite &&
-    eoTime(prerequisite.startDisplay) === "00:00" &&
-    eoTime(prerequisite.endDisplay) === "00:00"
+    etClock(prerequisite.start) === "00:00" &&
+    etClock(prerequisite.end) === "00:00"
   );
 }
 
@@ -191,10 +191,11 @@ function getNextFishWindow(id, nowUnix, nowEorzea) {
   }
 }
 
-function eoTime(s) {
-  const parts = String(s).trim().split(/\s+/);
-  if (parts.length < 2) return String(s);
-  return parts[1].split(":").slice(0, 2).join(":");
+function etClock(unix) {
+  const esec = Number(unix_to_eorzea_esec(BigInt(unix)));
+  const bell = Math.floor(esec / 3600) % 24;
+  const minute = Math.floor(esec / 60) % 60;
+  return String(bell).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
 }
 
 const STORAGE_KEY = "lastSearch";
@@ -486,8 +487,8 @@ async function query(formData, trigger) {
     let savedCount = 0;
     for (let i = 0; i < windows.length; i++) {
       const w = windows[i];
-      const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-      const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+      const startUnix = w.start;
+      const endUnix = w.end;
       const startD = new Date(startUnix * 1000);
       const endD = new Date(endUnix * 1000);
       const startDay = days[startD.getDay()];
@@ -496,7 +497,6 @@ async function query(formData, trigger) {
       const wMeta = {
         ...w,
         fishId: _selectedFishId,
-        fishName: _lastFishName,
         intuitionLengthSeconds: fishInfo.intuitionLengthSeconds,
       };
       const wSaved = isWindowSaved(wMeta);
@@ -506,7 +506,7 @@ async function query(formData, trigger) {
   <td>${escapeHtml(whenStr)}</td>
   <td>${escapeHtml(startDay)} ${escapeHtml(fmtDate(startD))}</td>
   <td>${escapeHtml(fmtTime(startD))} - ${escapeHtml(fmtTime(endD))}</td>
-  <td>${escapeHtml(eoTime(w.startDisplay))} - ${escapeHtml(eoTime(w.endDisplay))}</td>
+  <td>${escapeHtml(etClock(startUnix))} - ${escapeHtml(etClock(endUnix))}</td>
   <td>
     <button type="button" class="save-window-btn${wSaved ? " saved" : ""}" data-idx="${i}" title="${wSaved ? "Remove saved window" : "Save window"}" aria-label="${wSaved ? "Remove saved window" : "Save window"}">${wSaved ? "&#128278;" : "&#128204;"}</button>
     <button type="button" class="dl-single" data-idx="${i}" aria-label="Download window as calendar file">&#128197;&#11015;</button>
@@ -549,8 +549,8 @@ function fmtIcsDate(unixSecs) {
 }
 
 function icsVevent(w, fishName, alarmMinutes) {
-  const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-  const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  const startUnix = w.start;
+  const endUnix = w.end;
   const uid = `${windowKey(w)}@ffxivfishing`;
   const displayName = escapeIcsText((fishName || "Fish") + " Window");
   const lines = [
@@ -657,8 +657,8 @@ function googleCalendarUrl(unixStart, unixEnd, title, description) {
 function downloadSingleGcal(idx) {
   const w = _lastWindows[idx];
   if (!w) return;
-  const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-  const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  const startUnix = w.start;
+  const endUnix = w.end;
   globalThis.open(
     googleCalendarUrl(
       startUnix,
@@ -669,9 +669,9 @@ function downloadSingleGcal(idx) {
       " for " +
       _lastFishName +
       " ET " +
-      eoTime(w.startDisplay) +
+      etClock(startUnix) +
       " - " +
-      eoTime(w.endDisplay),
+      etClock(endUnix),
     ),
     "_blank",
     "noopener",
@@ -679,19 +679,20 @@ function downloadSingleGcal(idx) {
 }
 
 function downloadSavedGcalItem(w) {
-  const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-  const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  const startUnix = w.start;
+  const endUnix = w.end;
+  const fishName = fishNameById(w.fishId);
   globalThis.open(
     googleCalendarUrl(
       startUnix,
       endUnix,
-      w.fishName + " (" + eoTime(w.startDisplay) + ")",
+      fishName + " (" + etClock(startUnix) + ")",
       "Window for " +
-      w.fishName +
+      fishName +
       "\\nET " +
-      eoTime(w.startDisplay) +
+      etClock(startUnix) +
       " - " +
-      eoTime(w.endDisplay),
+      etClock(endUnix),
     ),
     "_blank",
     "noopener",
@@ -786,22 +787,86 @@ const MAX_NOTIFICATION_MINUTES = 1440;
 
 function isSavedWindow(value) {
   if (!value || typeof value !== "object") return false;
-  if (!Number.isInteger(value.fishId) || typeof value.fishName !== "string") {
-    return false;
-  }
-  if (
-    typeof value.startDisplay !== "string" ||
-    typeof value.endDisplay !== "string"
-  ) {
-    return false;
-  }
-  try {
-    BigInt(value.startEsec);
-    BigInt(value.endEsec);
-    return true;
-  } catch {
-    return false;
-  }
+  if (!Number.isInteger(value.fishId)) return false;
+  return (
+    Number.isFinite(value.start) &&
+    Number.isFinite(value.end) &&
+    value.end > value.start
+  );
+}
+
+function fishNameById(id) {
+  return (
+    _allFishInfo.find((fish) => fish.id === id)?.name || `Fish #${id}`
+  );
+}
+
+function migrateSavedWindows() {
+  const list = getList(SAVED_WINDOWS_KEY);
+  let changed = false;
+
+  const migrateTimes = (value) => {
+    if (!value || typeof value !== "object") return value;
+
+    let next = value;
+    if (next.startEsec != null || next.endEsec != null) {
+      try {
+        const start = Number(unix_from_eorzea_time(BigInt(next.startEsec)));
+        const end = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+        if (Number.isFinite(start) && Number.isFinite(end)) {
+          next = { ...next, start, end };
+          changed = true;
+        }
+      } catch {
+        return value;
+      }
+    }
+
+    if (
+      "startEsec" in next ||
+      "endEsec" in next ||
+      "startDisplay" in next ||
+      "endDisplay" in next ||
+      "durationEsec" in next ||
+      "fish" in next ||
+      "fishName" in next
+    ) {
+      const {
+        startEsec,
+        endEsec,
+        startDisplay,
+        endDisplay,
+        durationEsec,
+        fish,
+        fishName,
+        ...rest
+      } = next;
+      changed = true;
+      return rest;
+    }
+
+    return next;
+  };
+
+  const migrated = list
+    .map((value) => {
+      if (!value || typeof value !== "object") return value;
+      const prereqs = value.intuition?.prerequisiteWindows;
+      let next = value;
+      if (Array.isArray(prereqs)) {
+        next = {
+          ...value,
+          intuition: {
+            ...value.intuition,
+            prerequisiteWindows: prereqs.map(migrateTimes),
+          },
+        };
+      }
+      return migrateTimes(next);
+    })
+    .filter(isSavedWindow);
+  if (changed) setList(SAVED_WINDOWS_KEY, migrated);
+  return migrated;
 }
 
 function getSavedWindows() {
@@ -915,8 +980,8 @@ function getWindowTimes(w) {
   try {
     return {
       ...w,
-      startUnix: Number(unix_from_eorzea_time(BigInt(w.startEsec))),
-      endUnix: Number(unix_from_eorzea_time(BigInt(w.endEsec))),
+      startUnix: w.start,
+      endUnix: w.end,
     };
   } catch {
     return null;
@@ -940,7 +1005,7 @@ function getNextNotificationWindow(minutesBefore) {
 
 function formatNotificationWindow(window) {
   const date = new Date(window.startUnix * 1000);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString()} (ET ${eoTime(window.startDisplay)})`;
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString()} (ET ${etClock(window.startUnix)})`;
 }
 
 function showWindowNotification(windowInfo, minutesBefore) {
@@ -948,7 +1013,7 @@ function showWindowNotification(windowInfo, minutesBefore) {
     return false;
   }
 
-  const title = `${windowInfo.fishName} window is coming up`;
+  const title = `${fishNameById(windowInfo.fishId)} window is coming up`;
   const body = `Starts in ${minutesBefore} minute${minutesBefore === 1 ? "" : "s"} at ${formatNotificationWindow(windowInfo)}.`;
   try {
     const notification = new Notification(title, {
@@ -1102,7 +1167,7 @@ function handleGoogleCalendarToggle() {
 }
 
 function windowKey(w) {
-  return `${w.fishId}-${w.startEsec}-${w.endEsec}`;
+  return `${w.fishId}-${w.start}-${w.end}`;
 }
 
 function getIntuitionMonitorRange(w) {
@@ -1111,11 +1176,11 @@ function getIntuitionMonitorRange(w) {
   let start = null;
   for (const p of prereqs) {
     if (isPrerequisiteAlwaysUp(p)) continue;
-    const s = Number(unix_from_eorzea_time(BigInt(p.startEsec)));
+    const s = p.start;
     if (start === null || s < start) start = s;
   }
   if (start === null) return null;
-  const end = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+  const end = w.end;
   return { start, end };
 }
 
@@ -1174,16 +1239,17 @@ function downloadSavedIcs() {
   const saved = getSavedWindows();
   if (saved.length === 0) return;
   downloadIcsCalendar(
-    saved.map((w) => icsVevent(w, w.fishName, getIcsAlarmMinutes())),
+    saved.map((w) => icsVevent(w, fishNameById(w.fishId), getIcsAlarmMinutes())),
     "saved-windows.ics",
     "//saved-windows//EN",
   );
 }
 
 function downloadSavedIcsItem(w) {
+  const fishName = fishNameById(w.fishId);
   downloadIcsCalendar(
-    [icsVevent(w, w.fishName, getIcsAlarmMinutes())],
-    "window-" + kebab(w.fishName) + ".ics",
+    [icsVevent(w, fishName, getIcsAlarmMinutes())],
+    "window-" + kebab(fishName) + ".ics",
   );
 }
 
@@ -1200,17 +1266,13 @@ function intuitionInfoHtml(
 
   const prerequisiteLines = prerequisiteWindows
     .map((prerequisite) => {
-      const prerequisiteStartUnix = Number(
-        unix_from_eorzea_time(BigInt(prerequisite.startEsec)),
-      );
-      const prerequisiteEndUnix = Number(
-        unix_from_eorzea_time(BigInt(prerequisite.endEsec)),
-      );
+      const prerequisiteStartUnix = prerequisite.start;
+      const prerequisiteEndUnix = prerequisite.end;
       const prerequisiteStart = new Date(prerequisiteStartUnix * 1000);
       const prerequisiteEnd = new Date(prerequisiteEndUnix * 1000);
-      const fishName = prerequisite.fish || `Fish #${prerequisite.fishId}`;
-      const eorzeaStart = eoTime(prerequisite.startDisplay);
-      const eorzeaEnd = eoTime(prerequisite.endDisplay);
+      const fishName = fishNameById(prerequisite.fishId);
+      const eorzeaStart = etClock(prerequisiteStartUnix);
+      const eorzeaEnd = etClock(prerequisiteEndUnix);
       const alwaysUp = eorzeaStart === "00:00" && eorzeaEnd === "00:00";
       const localWindow = alwaysUp
         ? "always up"
@@ -1249,8 +1311,8 @@ function intuitionInfoHtml(
 
 function renderSavedWindows() {
   const saved = getSavedWindows().sort((a, b) => {
-    const aSec = BigInt(a.startEsec);
-    const bSec = BigInt(b.startEsec);
+    const aSec = a.start;
+    const bSec = b.start;
     if (aSec < bSec) return -1;
     if (aSec > bSec) return 1;
     return 0;
@@ -1276,30 +1338,31 @@ function renderSavedWindows() {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   for (const w of saved) {
-    const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-    const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+    const startUnix = w.start;
+    const endUnix = w.end;
     const startD = new Date(startUnix * 1000);
     const startDay = days[startD.getDay()];
     const dateStr = startD.toLocaleDateString();
     const timeStr = `${startD.toLocaleTimeString()} - ${new Date(endUnix * 1000).toLocaleTimeString()}`;
-    const eoStr = `${eoTime(w.startDisplay)} - ${eoTime(w.endDisplay)}`;
+    const eoStr = `${etClock(startUnix)} - ${etClock(endUnix)}`;
 
     const nowUnix = Math.floor(Date.now() / 1000);
     const { displayWhen, state } = fmtSavedWhen(startUnix, endUnix, nowUnix);
     const hasNote = getNote(w.fishId).length > 0;
+    const fishName = fishNameById(w.fishId);
 
     const div = document.createElement("div");
     div.className = `saved-item ${state}`;
     div.dataset.start = startUnix;
     div.dataset.end = endUnix;
     div.dataset.fishId = w.fishId;
-    div.dataset.fishName = w.fishName;
+    div.dataset.fishName = fishName;
     div.dataset.state = state;
     updateSavedWindowProgress(div, nowUnix, state);
     div.innerHTML = `
       <div class="saved-body">
         <div class="saved-top-row">
-          <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(w.fishName)}">${escapeHtml(w.fishName)}${hasNote ? `<span class="saved-note-indicator" title="Has note">&#128221;</span>` : ""}${fishEyesIndicator(w)}</span>
+          <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(fishName)}">${escapeHtml(fishName)}${hasNote ? `<span class="saved-note-indicator" title="Has note">&#128221;</span>` : ""}${fishEyesIndicator(w)}</span>
           <span class="window-when">${escapeHtml(displayWhen)}</span>
           <span class="saved-actions">
             <button type="button" class="dl-single" title="Download .ics" aria-label="Download saved window as calendar file">&#128197;&#11015;</button>
@@ -1417,8 +1480,8 @@ function startSavedWindowTimer() {
   let hasMonitorWindow = false;
   let nextStart = Infinity;
   for (const w of saved) {
-    const startUnix = Number(unix_from_eorzea_time(BigInt(w.startEsec)));
-    const endUnix = Number(unix_from_eorzea_time(BigInt(w.endEsec)));
+    const startUnix = w.start;
+    const endUnix = w.end;
     if (startUnix <= nowUnix && endUnix > nowUnix) {
       hasActiveWindow = true;
     } else if (
@@ -1478,7 +1541,6 @@ function updateSaveButtons() {
     const savedFlag = isWindowSaved({
       ...w,
       fishId: _selectedFishId,
-      fishName: _lastFishName,
     });
     btn.classList.toggle("saved", savedFlag);
     btn.title = savedFlag ? "Remove saved window" : "Save window";
@@ -1805,6 +1867,7 @@ async function main() {
     await init();
     await init_default();
     _wasmReady = true;
+    migrateSavedWindows();
     renderSavedWindows();
     startSavedWindowTimer();
     startNotificationTimer();
@@ -1903,7 +1966,6 @@ document.getElementById("results").addEventListener("click", (e) => {
       const wWithMeta = {
         ...w,
         fishId: _selectedFishId,
-        fishName: _lastFishName,
       };
       if (isWindowSaved(wWithMeta)) {
         removeSavedWindow(wWithMeta);
@@ -2007,8 +2069,8 @@ function createFishCard(f, opts = {}) {
   } else {
     const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
     if (next) {
-      const startUnix = Number(unix_from_eorzea_time(BigInt(next.startEsec)));
-      const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+      const startUnix = next.start;
+      const endUnix = next.end;
       const { whenStr, state } = fmtWhen(
         startUnix - nowUnix,
         endUnix - nowUnix,
@@ -2062,7 +2124,7 @@ function createFishCard(f, opts = {}) {
     ? 0
     : getSavedWindows().filter(
       (saved) =>
-        saved.fishId === f.id && BigInt(saved.endEsec) > BigInt(nowEorzea),
+        saved.fishId === f.id && saved.end > nowUnix,
     ).length;
   const displayName = `${f.name}${activeSavedCount ? ` (${activeSavedCount})` : ""}`;
   const localWindow = alwaysUp
@@ -2150,9 +2212,9 @@ function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
     if (!aWindow && bWindow) return 1;
     if (aWindow && bWindow) {
       const nextDiff =
-        BigInt(aWindow.startEsec) < BigInt(bWindow.startEsec)
+        aWindow.start < bWindow.start
           ? -1
-          : BigInt(aWindow.startEsec) > BigInt(bWindow.startEsec)
+          : aWindow.start > bWindow.start
             ? 1
             : 0;
       if (nextDiff !== 0) return nextDiff;
@@ -2178,8 +2240,8 @@ function hydrateFishNextWindows(elements) {
       const fishId = parseInt(el.dataset.fishId, 10);
       const next = getNextFishWindow(fishId, nowUnix, nowEorzea);
       if (next) {
-        const startUnix = Number(unix_from_eorzea_time(BigInt(next.startEsec)));
-        const endUnix = Number(unix_from_eorzea_time(BigInt(next.endEsec)));
+        const startUnix = next.start;
+        const endUnix = next.end;
         const { whenStr, state } = fmtWhen(
           startUnix - nowUnix,
           endUnix - nowUnix,

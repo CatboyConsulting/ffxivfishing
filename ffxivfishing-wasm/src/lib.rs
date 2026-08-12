@@ -62,11 +62,8 @@ struct FishInfo {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FishWindow {
-    start_esec: u64,
-    end_esec: u64,
-    start_display: String,
-    end_display: String,
-    duration_esec: u64,
+    start: u64,
+    end: u64,
     fish_eyes: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     intuition: Option<IntuitionWindowInfo>,
@@ -83,12 +80,9 @@ struct IntuitionWindowInfo {
 struct IntuitionWindowSetupInfo {
     amount: u8,
     fish_id: u32,
-    fish: String,
     fish_eyes: bool,
-    start_esec: u64,
-    end_esec: u64,
-    start_display: String,
-    end_display: String,
+    start: u64,
+    end: u64,
 }
 
 #[derive(Serialize)]
@@ -212,12 +206,7 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     }
 }
 
-fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, fd: &FishData) -> FishWindow {
-    let item_name = |id: u32| {
-        fd.item_by_id(id)
-            .map(|item| item.name().to_string())
-            .unwrap_or_else(|| format!("Unknown item ({id})"))
-    };
+fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, _fd: &FishData) -> FishWindow {
     let intuition = window.intuition().map(|intuition| IntuitionWindowInfo {
         prerequisite_windows: intuition
             .prerequisite_windows()
@@ -225,21 +214,15 @@ fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, fd: &FishData) -
             .map(|setup| IntuitionWindowSetupInfo {
                 amount: setup.amount(),
                 fish_id: setup.fish(),
-                fish: item_name(setup.fish()),
                 fish_eyes: setup.uses_fish_eyes(),
-                start_esec: setup.window().start().as_esecs(),
-                end_esec: setup.window().end().as_esecs(),
-                start_display: setup.window().start().to_string(),
-                end_display: setup.window().end().to_string(),
+                start: setup.window().start().unix_secs(),
+                end: setup.window().end().unix_secs(),
             })
             .collect(),
     });
     FishWindow {
-        start_esec: window.start().as_esecs(),
-        end_esec: window.end().as_esecs(),
-        start_display: window.start().to_string(),
-        end_display: window.end().to_string(),
-        duration_esec: window.duration().total_seconds(),
+        start: window.start().unix_secs(),
+        end: window.end().unix_secs(),
         fish_eyes: window.uses_fish_eyes(),
         intuition,
     }
@@ -576,8 +559,8 @@ mod tests {
             3
         );
         assert_eq!(
-            json["intuition"]["prerequisiteWindows"][0]["fish"],
-            "Indigo Prismfish"
+            json["intuition"]["prerequisiteWindows"][0]["fishId"],
+            24203
         );
         assert_eq!(json["intuition"]["prerequisiteWindows"][0]["amount"], 3);
 
@@ -596,12 +579,12 @@ mod tests {
         let fish_eyes_json =
             serde_json::to_value(fish_window_to_info(&fish_eyes_window, &data)).unwrap();
         assert_eq!(
-            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["startDisplay"],
-            "0001-01-02 00:00:00"
+            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["start"],
+            serde_json::json!(EorzeaTime::new(1, 1, 2, 0, 0, 0).unwrap().unix_secs())
         );
         assert_eq!(
-            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["endDisplay"],
-            "0001-01-02 04:00:00"
+            fish_eyes_json["intuition"]["prerequisiteWindows"][0]["end"],
+            serde_json::json!(EorzeaTime::new(1, 1, 2, 4, 0, 0).unwrap().unix_secs())
         );
     }
 
