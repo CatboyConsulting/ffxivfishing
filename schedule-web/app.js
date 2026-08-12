@@ -28,15 +28,6 @@ const DAY_OPTIONS = [
 ];
 const FILTER_INTUITION = true;
 
-let _savedOpen = (() => {
-  try {
-    const raw = localStorage.getItem("savedWindowsOpen");
-    if (raw === "true") return true;
-    if (raw === "false") return false;
-  } catch {}
-  return false;
-})();
-
 let _lastWindows = [];
 let _lastFishName = "";
 let _selectedFishId = 0;
@@ -1637,7 +1628,7 @@ function updateModalBackgroundInert() {
     document.getElementById("note-modal").classList.contains("open");
   document
     .querySelectorAll(
-      "main > *:not(#results-overlay):not(#results-panel):not(#import-export-overlay):not(#import-export-modal):not(#note-overlay):not(#note-modal), footer",
+      "main > *:not(#results-overlay):not(#results-panel):not(#import-export-overlay):not(#import-export-modal):not(#note-overlay):not(#note-modal), footer, .bottom-nav",
     )
     .forEach((element) => {
       element.inert = modalOpen;
@@ -1808,13 +1799,6 @@ async function main() {
   const formData = getFormData();
   populateForm(formData);
 
-  if (_savedOpen) {
-    const toggle = document.getElementById("saved-toggle");
-    toggle.classList.remove("collapsed");
-    toggle.setAttribute("aria-expanded", "true");
-    document.getElementById("saved-content").style.display = "";
-  }
-
   const elStatus = document.getElementById("status");
   try {
     elStatus.textContent = "Initializing WASM...";
@@ -1900,35 +1884,11 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-document.getElementById("config-toggle").addEventListener("click", function () {
-  const content = document.getElementById("config-content");
-  content.classList.toggle("hidden");
-  this.classList.toggle("collapsed");
-  this.setAttribute(
-    "aria-expanded",
-    String(!content.classList.contains("hidden")),
-  );
-  content.setAttribute(
-    "aria-hidden",
-    String(content.classList.contains("hidden")),
-  );
-});
-
 document.getElementById("download-ics").addEventListener("click", downloadIcs);
 
 document
   .getElementById("download-saved-ics")
   .addEventListener("click", downloadSavedIcs);
-
-document.getElementById("saved-toggle").addEventListener("click", function () {
-  _savedOpen = !_savedOpen;
-  document.getElementById("saved-content").style.display = _savedOpen
-    ? ""
-    : "none";
-  this.classList.toggle("collapsed", !_savedOpen);
-  this.setAttribute("aria-expanded", String(_savedOpen));
-  try { localStorage.setItem("savedWindowsOpen", String(_savedOpen)); } catch {}
-});
 
 document.getElementById("results").addEventListener("click", (e) => {
   const dlBtn = e.target.closest(".dl-single");
@@ -2416,6 +2376,46 @@ scrollTopBtn.addEventListener("click", () => {
   fishScroll.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
   window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
 });
+
+// ---- mobile view switching (bottom nav) ----
+
+function setConfigOpen(open) {
+  const toggle = document.getElementById("config-toggle");
+  const content = document.getElementById("config-content");
+  content.classList.toggle("hidden", !open);
+  toggle.classList.toggle("collapsed", !open);
+  toggle.setAttribute("aria-expanded", String(open));
+  content.setAttribute("aria-hidden", String(!open));
+}
+
+document.getElementById("config-toggle").addEventListener("click", function () {
+  const content = document.getElementById("config-content");
+  setConfigOpen(content.classList.contains("hidden"));
+});
+
+function setMobileView(view) {
+  document.querySelectorAll(".bottom-nav .nav-btn").forEach((btn) => {
+    const active = btn.dataset.view === view;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-current", active ? "page" : "false");
+  });
+  document
+    .getElementById("fish-list-section")
+    .classList.toggle("view-active", view === "fish");
+  document
+    .getElementById("saved-windows-section")
+    .classList.toggle("view-active", view === "saved");
+  document
+    .getElementById("config-section")
+    .classList.toggle("view-active", view === "config");
+  if (view === "config") setConfigOpen(true);
+}
+
+document.querySelectorAll(".bottom-nav .nav-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setMobileView(btn.dataset.view));
+});
+
+setMobileView("fish");
 
 initializeNotificationControls();
 main();

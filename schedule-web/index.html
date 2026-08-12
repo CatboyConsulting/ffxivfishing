@@ -16,128 +16,129 @@
   <main class="container">
     <h1>FFXIV Fishing - Schedule Tool</h1>
 
-    <!-- saved windows (collapsible) -->
-    <div class="saved-windows-section group-box">
-      <button type="button" class="config-toggle collapsed" id="saved-toggle" aria-expanded="false" aria-controls="saved-content">
-        <span class="toggle-arrow">&#9660;</span>
-        <span>Saved Windows <span id="saved-count"></span></span>
-      </button>
-      <div id="saved-content" style="display: none">
-        <div id="saved-windows-list"></div>
-        <div id="saved-window-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
-        </div>
-        <div id="saved-windows-empty">No windows saved yet.</div>
-        <button id="download-saved-ics" type="button" class="download-btn" style="display: none">
-          Download all as .ics
+    <div class="layout">
+      <!-- configuration (collapsible, spans top on desktop) -->
+      <div class="config-section" id="config-section">
+        <button type="button" class="config-toggle collapsed" id="config-toggle" aria-expanded="false"
+          aria-controls="config-content">
+          <span class="toggle-arrow" aria-hidden="true">&#9660;</span>
+          <span>Configuration</span>
         </button>
-      </div>
-    </div>
-
-    <!-- configuration (collapsible) -->
-    <div class="config-section">
-      <button type="button" class="config-toggle collapsed" id="config-toggle" aria-expanded="false"
-        aria-controls="config-content">
-        <span class="toggle-arrow" aria-hidden="true">&#9660;</span>
-        <span>Configuration</span>
-      </button>
-      <div id="config-content" class="hidden" role="region" aria-labelledby="config-toggle" aria-hidden="true">
-        <form id="config" aria-labelledby="config-toggle">
-          <fieldset class="config-fieldset">
-            <legend>Search Parameters</legend>
-            <label class="config-input-label" for="search-days">
-              <span>Search window in days</span>
-              <input type="number" id="search-days" name="days" min="1" />
-            </label>
-            <label class="config-input-label" for="window-limit">
-              <span>Max windows returned</span>
-              <input type="number" id="window-limit" name="limit" min="1" value="100" />
-            </label>
-            <label>
-              <input type="checkbox" id="use-fish-eyes" name="useFishEyes" />
-              Use Fish Eyes when available
-            </label>
-          </fieldset>
-
-          <fieldset id="notification-settings" class="config-fieldset notification-settings">
-            <legend>Window Notifications &amp; Export</legend>
-            <div class="notification-browser">
-              <label class="notification-toggle" for="enable-notifications">
-                <input type="checkbox" id="enable-notifications" />
-                <span>Enable browser notification before a window</span>
+        <div id="config-content" class="hidden" role="region" aria-labelledby="config-toggle" aria-hidden="true">
+          <form id="config" aria-labelledby="config-toggle">
+            <fieldset class="config-fieldset">
+              <legend>Search Parameters</legend>
+              <label class="config-input-label" for="search-days">
+                <span>Search window in days</span>
+                <input type="number" id="search-days" name="days" min="1" />
               </label>
-              <p id="notification-status" class="notification-status" role="status" aria-live="polite">
-                Notifications are off.
-              </p>
-              <div class="notification-options">
-                <label class="config-input-label" for="notification-minutes">
-                  <span>Minutes before the window</span>
-                  <input type="number" id="notification-minutes" min="1" max="1440" value="15" inputmode="numeric" />
+              <label class="config-input-label" for="window-limit">
+                <span>Max windows returned</span>
+                <input type="number" id="window-limit" name="limit" min="1" value="100" />
+              </label>
+              <label>
+                <input type="checkbox" id="use-fish-eyes" name="useFishEyes" />
+                Use Fish Eyes when available
+              </label>
+            </fieldset>
+
+            <fieldset id="notification-settings" class="config-fieldset notification-settings">
+              <legend>Window Notifications &amp; Export</legend>
+              <div class="notification-browser">
+                <label class="notification-toggle" for="enable-notifications">
+                  <input type="checkbox" id="enable-notifications" />
+                  <span>Enable browser notification before a window</span>
                 </label>
+                <p id="notification-status" class="notification-status" role="status" aria-live="polite">
+                  Notifications are off.
+                </p>
+                <div class="notification-options">
+                  <label class="config-input-label" for="notification-minutes">
+                    <span>Minutes before the window</span>
+                    <input type="number" id="notification-minutes" min="1" max="1440" value="15" inputmode="numeric" />
+                  </label>
+                </div>
               </div>
-            </div>
-            <label class="notification-toggle" for="export-ics-alarm">
-              <input type="checkbox" id="export-ics-alarm" checked />
-              <span>Add alarm field to .ics export</span>
-            </label>
-            <label class="notification-toggle" for="export-google-calendar">
-              <input type="checkbox" id="export-google-calendar" />
-              <span>Show Google Calendar export link</span>
-            </label>
-          </fieldset>
+              <label class="notification-toggle" for="export-ics-alarm">
+                <input type="checkbox" id="export-ics-alarm" checked />
+                <span>Add alarm field to .ics export</span>
+              </label>
+              <label class="notification-toggle" for="export-google-calendar">
+                <input type="checkbox" id="export-google-calendar" />
+                <span>Show Google Calendar export link</span>
+              </label>
+            </fieldset>
 
-          <fieldset class="config-fieldset">
-            <legend>Schedule Settings</legend>
-            <div id="schedule-rows"></div>
-            <button type="button" id="add-schedule">+ Add schedule</button>
-          </fieldset>
-        </form>
-      </div>
-    </div>
-
-    <!-- fish list (inline, main content) -->
-    <div class="fish-list-section" id="fish-list-section">
-      <div class="fish-list-header">
-        <h2>Fish List</h2>
-        <label class="fish-list-sort" for="fish-list-sort">
-          Sort
-          <select id="fish-list-sort">
-            <option value="name">Name</option>
-            <option value="uptime">Uptime (low to high)</option>
-            <option value="patch">Patch (new-&gt;old)</option>
-            <option value="next-window">Next window</option>
-          </select>
-        </label>
-      </div>
-      <div class="fish-list-search">
-        <label class="visually-hidden" for="fish-list-search">Search fish</label>
-        <input type="text" id="fish-list-search" placeholder="Fish name..." autocomplete="off" />
-        <button type="button" id="fish-list-search-clear" aria-label="Clear fish search" title="Clear fish search">
-          &times;
-        </button>
-        <button type="button" id="filter-help" class="filter-help-btn" aria-label="Show filter syntax"
-          aria-expanded="false" aria-controls="filter-help-box">
-          (?)
-        </button>
-        <div id="filter-help-box" class="filter-help-box" role="note">
-          <strong>Filter syntax</strong><br />
-          <code>zone:Mist</code> — by region or location<br />
-          <code>patch:6.0 / patch:.55</code> — by patch<br />
-          <code>uptime&gt;5%</code> — fish uptime above 5%<br />
-          <code>uptime&lt;0.1%</code> — fish uptime below 0.1%<br />
-          <code>zone:Mist && uptime&gt;1%</code> — combine with
-          <code>&&</code>
+            <fieldset class="config-fieldset">
+              <legend>Schedule Settings</legend>
+              <div id="schedule-rows"></div>
+              <button type="button" id="add-schedule">+ Add schedule</button>
+            </fieldset>
+          </form>
         </div>
       </div>
-      <div class="fish-list-stats" id="fish-list-stats">
-        <label>
-          <input type="checkbox" id="hide-caught" /> Uncaught only
-        </label>
-        <label>
-          <input type="checkbox" id="big-fish-only" /> Big fish only
-        </label>
-        <span id="fish-list-stats-text"></span>
+
+      <!-- saved windows (left) -->
+      <div class="side-column">
+        <div class="saved-windows-section group-box" id="saved-windows-section">
+          <h2 class="section-header">Saved Windows <span id="saved-count"></span></h2>
+          <div id="saved-content">
+            <div id="saved-windows-list"></div>
+            <div id="saved-window-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+            </div>
+            <div id="saved-windows-empty">No windows saved yet.</div>
+            <button id="download-saved-ics" type="button" class="download-btn" style="display: none">
+              Download all as .ics
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="fish-scroll" id="fish-list-scroll"></div>
+
+      <!-- fish list (right) -->
+      <div class="fish-list-section" id="fish-list-section">
+        <div class="fish-list-header">
+          <h2>Fish List</h2>
+          <label class="fish-list-sort" for="fish-list-sort">
+            Sort
+            <select id="fish-list-sort">
+              <option value="name">Name</option>
+              <option value="uptime">Uptime (low to high)</option>
+              <option value="patch">Patch (new-&gt;old)</option>
+              <option value="next-window">Next window</option>
+            </select>
+          </label>
+        </div>
+        <div class="fish-list-search">
+          <label class="visually-hidden" for="fish-list-search">Search fish</label>
+          <input type="text" id="fish-list-search" placeholder="Fish name..." autocomplete="off" />
+          <button type="button" id="fish-list-search-clear" aria-label="Clear fish search" title="Clear fish search">
+            &times;
+          </button>
+          <button type="button" id="filter-help" class="filter-help-btn" aria-label="Show filter syntax"
+            aria-expanded="false" aria-controls="filter-help-box">
+            (?)
+          </button>
+          <div id="filter-help-box" class="filter-help-box" role="note">
+            <strong>Filter syntax</strong><br />
+            <code>zone:Mist</code> — by region or location<br />
+            <code>patch:6.0 / patch:.55</code> — by patch<br />
+            <code>uptime&gt;5%</code> — fish uptime above 5%<br />
+            <code>uptime&lt;0.1%</code> — fish uptime below 0.1%<br />
+            <code>zone:Mist && uptime&gt;1%</code> — combine with
+            <code>&&</code>
+          </div>
+        </div>
+        <div class="fish-list-stats" id="fish-list-stats">
+          <label>
+            <input type="checkbox" id="hide-caught" /> Uncaught only
+          </label>
+          <label>
+            <input type="checkbox" id="big-fish-only" /> Big fish only
+          </label>
+          <span id="fish-list-stats-text"></span>
+        </div>
+        <div class="fish-scroll" id="fish-list-scroll"></div>
+      </div>
     </div>
 
     <button type="button" id="import-export-open" class="btn-primary" style="margin-top: 0.5rem">
@@ -260,6 +261,12 @@
       license</a>.<br />
     Build: __BUILD_NUMBER__
   </footer>
+
+  <nav class="bottom-nav" aria-label="Primary">
+    <button type="button" class="nav-btn" data-view="fish">Fish List</button>
+    <button type="button" class="nav-btn" data-view="saved">Saved</button>
+    <button type="button" class="nav-btn" data-view="config">Config</button>
+  </nav>
 </body>
 
 </html>

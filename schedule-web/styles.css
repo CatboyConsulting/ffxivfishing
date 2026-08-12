@@ -35,7 +35,7 @@ body {
 .container {
   max-width: 960px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0.5rem;
 }
 
 main.container {
@@ -278,7 +278,7 @@ td {
 #saved-windows-list .saved-item .window-detail {
   display: block;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   margin-top: 1px;
 }
 
@@ -334,9 +334,21 @@ td {
   font-size: 0.85rem;
 }
 
-/* ---- config toggle ---- */
+/* ---- section headers ---- */
 .config-section {
   margin-bottom: 0.5rem;
+}
+
+.section-header {
+  margin: 0;
+  padding: 7px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--bg-medium);
+  color: var(--text-accent);
+  border: 1px solid var(--bg-border);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .config-toggle {
@@ -344,6 +356,7 @@ td {
   box-sizing: border-box;
   padding: 7px;
   font-size: 0.85rem;
+  font-weight: 700;
   background: var(--bg-medium);
   color: var(--text-accent);
   border: 1px solid var(--bg-border);
@@ -352,6 +365,7 @@ td {
   align-items: center;
   gap: 0.4rem;
   letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .config-toggle:hover {
@@ -361,6 +375,7 @@ td {
 
 .config-toggle .toggle-arrow {
   font-size: 0.75rem;
+  transition: transform 0.2s ease;
 }
 
 .config-toggle.collapsed .toggle-arrow {
@@ -401,10 +416,6 @@ td {
 #config input[type="number"] {
   box-sizing: border-box;
   width: 5rem;
-}
-
-.hidden {
-  display: none !important;
 }
 
 .notification-settings {
@@ -552,11 +563,11 @@ td {
   align-items: center;
   gap: 0.35rem;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 
 .fish-list-section .fish-list-sort select {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   padding: 3px 5px;
 }
 
@@ -674,7 +685,7 @@ td {
 
 .fish-item .fish-next-window {
   font-weight: 400;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text-primary);
   margin-left: 0.4rem;
   white-space: nowrap;
@@ -690,13 +701,13 @@ td {
 
 .fish-item .fish-meta {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   display: block;
 }
 
 .fish-item .fish-requirement {
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   display: block;
 }
 
@@ -745,7 +756,7 @@ td {
   border: none;
   padding: 0 2px;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   text-decoration: underline;
 }
@@ -835,6 +846,7 @@ td {
   width: 800px;
   max-width: calc(100vw - 2rem);
   max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
   background: var(--bg-dark);
   border: 1px solid var(--bg-border);
   z-index: 201;
@@ -1029,7 +1041,7 @@ footer {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 
 .import-export-content .btn-primary {
@@ -1071,6 +1083,9 @@ footer {
   .results-panel {
     width: calc(100vw - 2rem);
     max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    top: 1rem;
+    transform: translateX(-50%);
   }
 
   .saved-item {
@@ -1191,7 +1206,7 @@ footer {
 .spot-popup-domain {
   margin-left: auto;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
 }
 
 /* ---- animations ---- */
@@ -1199,17 +1214,6 @@ footer {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
 }
 
 @keyframes flashSuccess {
@@ -1237,10 +1241,6 @@ a {
   transition: background-color 0.15s ease;
 }
 
-.config-toggle .toggle-arrow {
-  transition: transform 0.2s ease;
-}
-
 .dl-single,
 .dl-gcal,
 .save-window-btn,
@@ -1263,10 +1263,6 @@ a {
 .results-overlay.open {
   display: block;
   animation: fadeIn 0.2s ease;
-}
-
-.results-panel.open {
-  animation: scaleIn 0.25s ease;
 }
 
 /* ---- status highlight flash ---- */
@@ -1326,6 +1322,147 @@ a {
 .scroll-top-btn:hover {
   color: var(--text-primary);
   border-color: var(--text-muted);
+}
+
+/* ---- responsive two-pane layout ---- */
+
+.container {
+  max-width: 1400px;
+}
+
+.layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.bottom-nav {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .config-section {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  .side-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+  }
+
+  #saved-windows-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
+  }
+
+  #saved-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #fish-list-section,
+  #saved-windows-section,
+  #config-section {
+    display: none;
+  }
+
+  #fish-list-section.view-active {
+    display: flex;
+  }
+
+  #saved-windows-section.view-active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  #saved-windows-section.view-active #saved-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  #config-section.view-active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  #config-section .config-toggle {
+    display: none;
+  }
+
+  #config-section.view-active #config-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    max-height: none;
+  }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3.2rem;
+    background: var(--bg-medium);
+    border-top: 1px solid var(--bg-border);
+    z-index: 150;
+  }
+
+  .bottom-nav .nav-btn {
+    flex: 1;
+    border: none;
+    border-right: 1px solid var(--bg-border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bottom-nav .nav-btn:last-child {
+    border-right: none;
+  }
+
+  .bottom-nav .nav-btn.active {
+    color: var(--text-accent);
+    background: var(--bg-hover);
+  }
+
+  body {
+    padding-bottom: 3.2rem;
+  }
+
+  .scroll-top-btn {
+    bottom: 4.2rem;
+  }
 }
 
 /* ---- reduced motion ---- */
