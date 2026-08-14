@@ -1,6 +1,5 @@
 use std::cell::OnceCell;
 
-use chrono_tz::Tz;
 use ffxivfishing::{
     carbuncledata,
     eorzea_time::{EORZEA_SUN, EorzeaTime},
@@ -325,16 +324,13 @@ pub fn get_fish_windows_in_schedule(
     schedule_json: &str,
     timeperiod_secs: u64,
     limit: u32,
-    timezone_name: &str,
+    timezone_offset_secs: i32,
     filter_intuition: bool,
     use_fish_eyes: bool,
     include_ongoing: bool,
 ) -> Result<String, JsValue> {
     let local_schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
         .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {}", e)))?;
-    let tz: Tz = timezone_name
-        .parse()
-        .map_err(|_| JsValue::from_str("Invalid timezone name"))?;
 
     with_fish_data(|fd| {
         let fish = fd
@@ -347,7 +343,7 @@ pub fn get_fish_windows_in_schedule(
             &local_schedule,
             timeperiod_secs,
             limit,
-            tz,
+            timezone_offset_secs,
             filter_intuition,
             use_fish_eyes,
             include_ongoing,

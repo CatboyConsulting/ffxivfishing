@@ -1,7 +1,5 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use chrono::{Offset, TimeZone, Utc};
-use chrono_tz::Tz;
 use serde::Deserialize;
 
 use crate::{
@@ -26,7 +24,7 @@ pub fn fish_windows_in_schedule(
     schedule: &[ScheduleEntry],
     timeperiod_secs: u64,
     limit: u32,
-    timezone: Tz,
+    timezone_offset_secs: i32,
     filter_intuition: bool,
     use_fish_eyes: bool,
     include_ongoing: bool,
@@ -58,7 +56,12 @@ pub fn fish_windows_in_schedule(
 
         let next_current = window.end();
         if window_end > now
-            && window_overlaps_any_schedule(window_start, window_end, schedule, timezone)
+            && window_overlaps_any_schedule(
+                window_start,
+                window_end,
+                schedule,
+                timezone_offset_secs,
+            )
         {
             windows.push(window);
         }
@@ -74,7 +77,7 @@ fn window_overlaps_any_schedule(
     window_start: SystemTime,
     window_end: SystemTime,
     schedule: &[ScheduleEntry],
-    timezone: Tz,
+    timezone_offset_secs: i32,
 ) -> bool {
     let start_secs = window_start
         .duration_since(UNIX_EPOCH)
@@ -85,47 +88,31 @@ fn window_overlaps_any_schedule(
         .unwrap_or_default()
         .as_secs() as i64;
 
-    let start_day = start_secs.div_euclid(DAY_SECS);
-    let end_day = end_secs.div_euclid(DAY_SECS);
-    for day in start_day..=end_day {
-        let day_midnight = day * DAY_SECS;
-        let day_end = day_midnight + DAY_SECS;
-        let portion_start = start_secs.max(day_midnight);
-        let portion_end = end_secs.min(day_end);
-        if portion_start >= portion_end {
-            continue;
-        }
+    let offset = timezone_offset_secs as i64;
+    let local_start = start_secs + offset;
+    let local_end = end_secs + offset;
+    let first_local_day = local_start.div_euclid(DAY_SECS) - 1;
+    let last_local_day = (local_end - 1).div_euclid(DAY_SECS);
 
-        let utc_midnight = Utc.timestamp_opt(day_midnight, 0).single().unwrap();
-        let offset = timezone
-            .offset_from_utc_datetime(&utc_midnight.naive_utc())
-            .fix()
-            .local_minus_utc() as i64;
-        let local_start = portion_start + offset;
-        let local_end = portion_end + offset;
-        let first_local_day = local_start.div_euclid(DAY_SECS) - 1;
-        let last_local_day = (local_end - 1).div_euclid(DAY_SECS);
+    for local_day in first_local_day..=last_local_day {
+        let day_of_week = (local_day + 4).rem_euclid(7) as u8;
+        let local_day_start = local_day * DAY_SECS;
+        for entry in schedule {
+            if entry
+                .day_of_week
+                .is_some_and(|entry_day| entry_day != day_of_week)
+            {
+                continue;
+            }
 
-        for local_day in first_local_day..=last_local_day {
-            let day_of_week = (local_day + 4).rem_euclid(7) as u8;
-            let local_day_start = local_day * DAY_SECS;
-            for entry in schedule {
-                if entry
-                    .day_of_week
-                    .is_some_and(|entry_day| entry_day != day_of_week)
-                {
-                    continue;
-                }
+            let schedule_start = local_day_start + entry.start_sec as i64;
+            let mut schedule_end = local_day_start + entry.end_sec as i64;
+            if entry.end_sec <= entry.start_sec {
+                schedule_end += DAY_SECS;
+            }
 
-                let schedule_start = local_day_start + entry.start_sec as i64;
-                let mut schedule_end = local_day_start + entry.end_sec as i64;
-                if entry.end_sec <= entry.start_sec {
-                    schedule_end += DAY_SECS;
-                }
-
-                if local_start < schedule_end && local_end > schedule_start {
-                    return true;
-                }
+            if local_start < schedule_end && local_end > schedule_start {
+                return true;
             }
         }
     }
@@ -137,22 +124,20 @@ fn window_overlaps_any_schedule(
 mod tests {
     use super::*;
 
-    fn timezone() -> Tz {
-        "Europe/London".parse().unwrap()
+    fn bst_offset() -> i32 {
+        3_600
+    }
+
+    fn gmt_offset() -> i32 {
+        0
     }
 
     fn bst_secs() -> u64 {
-        Utc.with_ymd_and_hms(2024, 7, 15, 0, 0, 0)
-            .single()
-            .unwrap()
-            .timestamp() as u64
+        1_721_001_600
     }
 
     fn gmt_secs() -> u64 {
-        Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0)
-            .single()
-            .unwrap()
-            .timestamp() as u64
+        1_705_276_800
     }
 
     fn evening_schedule(day_of_week: Option<u8>) -> Vec<ScheduleEntry> {
@@ -171,13 +156,13 @@ mod tests {
             UNIX_EPOCH + Duration::from_secs(b + 71_760),
             UNIX_EPOCH + Duration::from_secs(b + 72_150),
             &schedule,
-            timezone(),
+            bst_offset(),
         ));
         assert!(window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + 78_960),
             UNIX_EPOCH + Duration::from_secs(b + 79_350),
             &schedule,
-            timezone(),
+            bst_offset(),
         ));
     }
 
@@ -190,13 +175,13 @@ mod tests {
             UNIX_EPOCH + Duration::from_secs(bst_secs() + window_start),
             UNIX_EPOCH + Duration::from_secs(bst_secs() + window_end),
             &schedule,
-            timezone(),
+            bst_offset(),
         ));
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(gmt_secs() + window_start),
             UNIX_EPOCH + Duration::from_secs(gmt_secs() + window_end),
             &schedule,
-            timezone(),
+            gmt_offset(),
         ));
     }
 
@@ -208,13 +193,13 @@ mod tests {
             UNIX_EPOCH + Duration::from_secs(b + 82_860),
             UNIX_EPOCH + Duration::from_secs(b + 82_920),
             &schedule,
-            timezone(),
+            gmt_offset(),
         ));
         assert!(!window_overlaps_any_schedule(
             UNIX_EPOCH + Duration::from_secs(b + DAY_SECS as u64 + 82_860),
             UNIX_EPOCH + Duration::from_secs(b + DAY_SECS as u64 + 82_920),
             &schedule,
-            timezone(),
+            gmt_offset(),
         ));
     }
 
@@ -230,7 +215,7 @@ mod tests {
             UNIX_EPOCH + Duration::from_secs(b + 86_400 + 1_800),
             UNIX_EPOCH + Duration::from_secs(b + 86_400 + 3_600),
             &schedule,
-            timezone(),
+            gmt_offset(),
         ));
     }
 }

@@ -366,7 +366,7 @@ async function query(formData, trigger) {
     const nowUnix = Math.floor(Date.now() / 1000);
     const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
     const timeperiodSecs = BigInt(formData.days * 86400);
-    const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezoneOffsetSecs = -new Date(nowUnix * 1000).getTimezoneOffset() * 60;
     const limit = formData.limit || 100;
 
     elStatus.textContent = `Searching the next ${formData.days} day(s) for windows...`;
@@ -465,7 +465,7 @@ async function query(formData, trigger) {
         JSON.stringify(formData.schedule),
         timeperiodSecs,
         limit,
-        timezoneName,
+        timezoneOffsetSecs,
         FILTER_INTUITION,
         formData.useFishEyes === true,
         true,
