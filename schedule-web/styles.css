@@ -11,6 +11,41 @@
   --text-muted: #9a9288;
   --text-error: #d45a4a;
   --text-white: #ffffff;
+  --text-success: #3fb950;
+}
+
+:root[data-theme="light"] {
+  --bg-dark: #f4f1ea;
+  --bg-medium: #ffffff;
+  --bg-hover: #eae5d9;
+  --bg-border: #d6cfc0;
+  --bg-error: #fbe9e7;
+  --bg-primary: #3a8f80;
+  --text-primary: #3a352c;
+  --text-heading: #26221a;
+  --text-accent: #8a5c00;
+  --text-muted: #5f5a4e;
+  --text-error: #b33a2b;
+  --text-white: #ffffff;
+  --text-success: #1a6b2c;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-dark: #f4f1ea;
+    --bg-medium: #ffffff;
+    --bg-hover: #eae5d9;
+    --bg-border: #d6cfc0;
+    --bg-error: #fbe9e7;
+    --bg-primary: #3a8f80;
+    --text-primary: #3a352c;
+    --text-heading: #26221a;
+    --text-accent: #8a5c00;
+    --text-muted: #5f5a4e;
+    --text-error: #b33a2b;
+    --text-white: #ffffff;
+    --text-success: #1a6b2c;
+  }
 }
 
 * {
@@ -52,6 +87,31 @@ h1 {
   font-weight: 700;
   margin: 0 0 0.5rem;
   color: var(--text-heading);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+.theme-toggle {
+  flex: none;
+  padding: 3px 8px;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.theme-toggle:hover {
+  color: var(--text-heading);
+  background: var(--bg-hover);
 }
 
 form {
@@ -489,7 +549,7 @@ td {
 }
 
 .notification-status.success {
-  color: var(--bg-primary);
+  color: var(--text-success);
 }
 
 .notification-status.error {
@@ -668,7 +728,7 @@ td {
 }
 
 .fish-item.caught .fish-name {
-  color: var(--bg-primary);
+  color: var(--text-success);
 }
 
 .fish-item input[type="checkbox"] {
@@ -1000,7 +1060,7 @@ td {
 }
 
 .save-window-btn.saved {
-  color: #3fb950;
+  color: var(--text-success);
 }
 
 .results-panel .results-scroll tr.saved-window td {
@@ -1065,7 +1125,7 @@ footer {
 }
 
 .import-export-status.success {
-  color: var(--bg-primary);
+  color: var(--text-success);
 }
 
 .visually-hidden {
@@ -1449,8 +1509,17 @@ a {
     font-size: 0.8rem;
     font-weight: 600;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 0.1rem;
+  }
+
+  .bottom-nav .nav-btn .nav-btn-sub {
+    font-size: 0.65rem;
+    font-weight: 500;
+    line-height: 1.1;
+    opacity: 0.85;
   }
 
   .bottom-nav .nav-btn:last-child {

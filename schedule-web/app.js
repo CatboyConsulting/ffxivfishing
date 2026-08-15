@@ -97,6 +97,16 @@ function formatRealDuration(seconds) {
   );
 }
 
+function parseWithinSeconds(raw) {
+  const match = /^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/i.exec(String(raw).trim());
+  if (!match) return NaN;
+  const value = parseFloat(match[1]);
+  if (!Number.isFinite(value)) return NaN;
+  const unit = (match[2] || "m").toLowerCase();
+  const multiplier = { s: 1, m: 60, h: 3600, d: 86400 }[unit];
+  return value * multiplier;
+}
+
 function formatLocalWindow(start, end) {
   const startDate = start.toLocaleDateString();
   const endDate = end.toLocaleDateString();
@@ -212,6 +222,40 @@ function setStoredConfig(cfg) {
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   } catch { }
+}
+
+function applyTheme(theme, { persist = false } = {}) {
+  if (theme !== "light" && theme !== "dark") theme = "dark";
+  document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute(
+      "content",
+      theme === "light" ? "#f4f1ea" : "#14141e",
+    );
+  }
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = theme === "light" ? "\u263E" : "\u2600";
+    btn.setAttribute(
+      "aria-label",
+      theme === "light" ? "Switch to dark mode" : "Switch to light mode",
+    );
+  }
+  if (persist) {
+    const cfg = getStoredConfig();
+    cfg.theme = theme;
+    setStoredConfig(cfg);
+  }
+}
+
+function resolveTheme() {
+  const stored = getStoredConfig().theme;
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
 }
 
 function saveSearch(p) {
@@ -1418,6 +1462,7 @@ function renderSavedWindows() {
     empty.style.display = "";
     document.getElementById("saved-count").textContent = "";
     dlBtn.style.display = "none";
+    updateSavedNavCountdown();
     return;
   }
 
@@ -1507,10 +1552,30 @@ function renderSavedWindows() {
     container.appendChild(div);
   }
   updateSavedWindowPrereqStatuses(Math.floor(Date.now() / 1000));
+  updateSavedNavCountdown();
 }
 
 let _savedTimerId = null;
 let _fishListTimerId = null;
+
+function updateSavedNavCountdown() {
+  const el = document.getElementById("saved-next-window");
+  if (!el) return;
+  const nowUnix = Math.floor(Date.now() / 1000);
+  let next = null;
+  for (const w of getSavedWindows()) {
+    if (w.end <= nowUnix) continue;
+    if (next === null || w.start < next.start) next = w;
+  }
+  if (!next) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  const { displayWhen } = fmtSavedWhen(next.start, next.end, nowUnix);
+  el.textContent = displayWhen;
+  el.hidden = false;
+}
 
 function updateSavedWindowProgress(div, nowUnix, state) {
   const startUnix = parseInt(div.dataset.start, 10);
@@ -1554,6 +1619,7 @@ function updateSavedWindowTimers() {
       updateSavedWindowProgress(div, nowUnix, state);
     });
   updateSavedWindowPrereqStatuses(nowUnix);
+  updateSavedNavCountdown();
   if (announcements.length) {
     document.getElementById("saved-window-announcer").textContent =
       announcements.join(" ");
@@ -2412,6 +2478,14 @@ function renderFishList() {
         filtered = filtered.filter((f) =>
           op === ">" ? f.fishUptime > threshold : f.fishUptime < threshold,
         );
+      } else if (pq.startsWith("within:")) {
+        const withinSecs = parseWithinSeconds(part.slice(7));
+        if (!Number.isFinite(withinSecs) || withinSecs < 0) continue;
+        const horizon = nowUnix + withinSecs;
+        filtered = filtered.filter((f) => {
+          const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
+          return !!next && next.start <= horizon && next.end > nowUnix;
+        });
       } else {
         filtered = filtered.filter((f) => f.name.toLowerCase().includes(pq));
       }
@@ -2585,6 +2659,25 @@ document.querySelectorAll(".bottom-nav .nav-btn").forEach((btn) => {
 });
 
 setMobileView("fish");
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const current =
+    document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  applyTheme(current === "light" ? "dark" : "light", { persist: true });
+});
+
+const _themeMedia = window.matchMedia("(prefers-color-scheme: light)");
+const _themeMediaChange = () => {
+  const stored = getStoredConfig().theme;
+  if (stored !== "light" && stored !== "dark") applyTheme(resolveTheme());
+};
+if (_themeMedia.addEventListener) {
+  _themeMedia.addEventListener("change", _themeMediaChange);
+} else if (_themeMedia.addListener) {
+  _themeMedia.addListener(_themeMediaChange);
+}
+
+applyTheme(resolveTheme());
 
 initializeNotificationControls();
 initializeSoundControls();

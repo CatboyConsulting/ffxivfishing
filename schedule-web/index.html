@@ -9,12 +9,40 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <title>FFXIV Fishing Schedule Tool</title>
+  <script>
+    (function () {
+      var theme;
+      try {
+        theme = (JSON.parse(localStorage.getItem("config") || "null") || {}).theme;
+      } catch (e) {
+        theme = undefined;
+      }
+      if (theme !== "light" && theme !== "dark") {
+        theme =
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark";
+      }
+      document.documentElement.dataset.theme = theme;
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute(
+          "content",
+          theme === "light" ? "#f4f1ea" : "#14141e",
+        );
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 
 <body>
   <main class="container">
-    <h1>FFXIV Fishing - Schedule Tool</h1>
+    <div class="page-header">
+      <h1>FFXIV Fishing - Schedule Tool</h1>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle light and dark mode"></button>
+    </div>
 
     <div class="layout">
       <!-- configuration (collapsible, spans top on desktop) -->
@@ -132,6 +160,7 @@
             <code>patch:6.0 / patch:.55</code> — by patch<br />
             <code>uptime&gt;5%</code> — fish uptime above 5%<br />
             <code>uptime&lt;0.1%</code> — fish uptime below 0.1%<br />
+            <code>within:30m</code> — window in the next 30m (s/m/h/d)<br />
             <code>zone:Mist && uptime&gt;1%</code> — combine with
             <code>&&</code>
           </div>
@@ -272,7 +301,10 @@
 
   <nav class="bottom-nav" aria-label="Primary">
     <button type="button" class="nav-btn" data-view="fish">Fish List</button>
-    <button type="button" class="nav-btn" data-view="saved">Saved</button>
+    <button type="button" class="nav-btn" data-view="saved">
+      <span class="nav-btn-label">Saved</span>
+      <span class="nav-btn-sub" id="saved-next-window" hidden></span>
+    </button>
     <button type="button" class="nav-btn" data-view="config">Config</button>
   </nav>
 </body>
