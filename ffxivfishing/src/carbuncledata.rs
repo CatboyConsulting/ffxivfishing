@@ -446,7 +446,7 @@ mod tests {
                 Some(ref _window1) => {
                     let w = window.unwrap();
                     println!(
-                        "{:?}: {} - {:?}",
+                        "{:?}: {:?} - {:?}",
                         fish.name(),
                         w,
                         w.start().to_system_time()

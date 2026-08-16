@@ -36,7 +36,7 @@ pub fn fish_windows_in_schedule(
     let mut include_current_ongoing = include_ongoing;
 
     while windows.len() < limit as usize {
-        let window = match fish.next_window_with_fish_eyes(
+        let window = match fish.next_window(
             current,
             include_current_ongoing,
             filter_intuition,

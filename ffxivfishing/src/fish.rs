@@ -279,7 +279,11 @@ impl FishWindowDefinition {
             }
         }
 
-        let with_fish_eyes = if use_fish_eyes { last_with } else { last_without };
+        let with_fish_eyes = if use_fish_eyes {
+            last_with.or(last_without)
+        } else {
+            last_without
+        };
         PrerequisiteWindows { with_fish_eyes, without_fish_eyes: last_without }
     }
 }
@@ -617,26 +621,6 @@ impl Fish {
         filter_intuition: bool,
         use_fish_eyes: bool,
         intuition_lookback_minutes: u64,
-        limit: u32,
-    ) -> Option<EorzeaTimeSpan> {
-        self.next_window_with_fish_eyes(
-            start,
-            include_ongoing,
-            filter_intuition,
-            use_fish_eyes,
-            intuition_lookback_minutes,
-            limit,
-        )
-        .map(|window| window.span)
-    }
-
-    pub fn next_window_with_fish_eyes(
-        &self,
-        start: EorzeaTime,
-        include_ongoing: bool,
-        filter_intuition: bool,
-        use_fish_eyes: bool,
-        intuition_lookback_minutes: u64,
         mut limit: u32,
     ) -> Option<FishWindow> {
         let definition = self.window_definition(use_fish_eyes);
@@ -713,7 +697,7 @@ impl Fish {
         let mut include_current_ongoing = include_ongoing;
 
         while remaining > 0 {
-            let window = match self.next_window_with_fish_eyes(
+            let window = match self.next_window(
                 current_time,
                 include_current_ongoing,
                 filter_intuition,
@@ -937,6 +921,29 @@ impl Fish {
         self.intuition
             .as_ref()
             .and_then(|intuition| intuition.length.map(|length| length.as_secs()))
+    }
+
+    pub fn patch_string(&self) -> String {
+        let (major, minor) = self.patch;
+        if minor.is_multiple_of(10) {
+            format!("{major}.{}", minor / 10)
+        } else {
+            format!("{major}.{minor}")
+        }
+    }
+
+    pub fn uptime(&self) -> f64 {
+        let weather = self.location.region.weather();
+        let pattern_uptime = weather.pattern_uptime(&self.previous_weather_set, &self.weather_set);
+        let day = EORZEA_SUN.total_seconds();
+        let start = self.window_start.total_seconds();
+        let end = self.window_end.total_seconds();
+        let window_len = if end > start {
+            end - start
+        } else {
+            end + day - start
+        };
+        pattern_uptime * (window_len as f64 / day as f64)
     }
 }
 
@@ -1423,7 +1430,7 @@ mod tests {
         assert_eq!(supported.end(), EorzeaTime::new(1, 1, 3, 0, 0, 0).unwrap());
 
         let supported_tagged = make_fish(true)
-            .next_window_with_fish_eyes(
+            .next_window(
                 start,
                 true,
                 false,
@@ -1527,7 +1534,7 @@ mod tests {
         );
         let target = data.fish_by_id(1).unwrap();
         let window = target
-            .next_window_with_fish_eyes(
+            .next_window(
                 EorzeaTime::from_esecs(0),
                 false,
                 true,

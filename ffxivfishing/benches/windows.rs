@@ -66,5 +66,29 @@ let mut group = c.benchmark_group("next_windows");
     group.finish();
 }
 
-criterion_group!(benches, bench_next_window, bench_next_windows);
+fn bench_filter(c: &mut Criterion) {
+    use ffxivfishing::filter::{NextWindowCache, filter_fish};
+
+    let data = ffxivfishing::carbuncledata::carbuncle_fishes().expect("data parse");
+
+    let mut group = c.benchmark_group("filter");
+    group.bench_function("name", |b| {
+        let mut cache = NextWindowCache::new();
+        b.iter(|| filter_fish(&data, &mut cache, "warden", EORZEA_ZERO_TIME, false));
+    });
+    group.bench_function("within_30m_cold", |b| {
+        b.iter(|| {
+            let mut cache = NextWindowCache::new();
+            filter_fish(&data, &mut cache, "within:30m", EORZEA_ZERO_TIME, false)
+        });
+    });
+    group.bench_function("within_30m_warm", |b| {
+        let mut cache = NextWindowCache::new();
+        filter_fish(&data, &mut cache, "within:30m", EORZEA_ZERO_TIME, false);
+        b.iter(|| filter_fish(&data, &mut cache, "within:30m", EORZEA_ZERO_TIME, false));
+    });
+    group.finish();
+}
+
+criterion_group!(benches, bench_next_window, bench_next_windows, bench_filter);
 criterion_main!(benches);

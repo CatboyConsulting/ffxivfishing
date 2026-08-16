@@ -1,8 +1,9 @@
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 
 use ffxivfishing::{
     carbuncledata,
-    eorzea_time::{EORZEA_SUN, EorzeaTime},
+    eorzea_time::EorzeaTime,
+    filter::{self, NextWindowCache},
     fish::{DEFAULT_INTUITION_LOOKBACK_MINUTES, Fish, FishData},
     schedule::{self, ScheduleEntry},
 };
@@ -11,6 +12,7 @@ use wasm_bindgen::prelude::*;
 
 thread_local! {
     static FISH_DATA: OnceCell<FishData> = const { OnceCell::new() };
+    static NEXT_WINDOW_CACHE: RefCell<NextWindowCache> = RefCell::new(NextWindowCache::new());
 }
 
 #[derive(Serialize)]
@@ -93,6 +95,13 @@ struct FishEntry {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct FishWindowEntry {
+    id: u32,
+    window: Option<FishWindow>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct WeatherInfo {
     weather: String,
     timestamp_esec: u64,
@@ -121,26 +130,13 @@ fn with_fish_data<T>(f: impl FnOnce(&FishData) -> Result<T, JsValue>) -> Result<
 }
 
 fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
-    let p = fish.patch;
-    let patch_str = if p.1.is_multiple_of(10) {
-        format!("{}.{}", p.0, p.1 / 10)
-    } else {
-        format!("{}.{}", p.0, p.1)
-    };
+    let patch_str = fish.patch_string();
     let weather = fish.location.region().weather();
     let prev_uptime = weather.weather_uptime(&fish.previous_weather_set);
     let curr_uptime = weather.weather_uptime(&fish.weather_set);
     let pat_uptime = weather.pattern_uptime(&fish.previous_weather_set, &fish.weather_set);
+    let fish_uptime = fish.uptime();
 
-    let day = EORZEA_SUN.total_seconds();
-    let start = fish.window_start.total_seconds();
-    let end = fish.window_end.total_seconds();
-    let window_len = if end > start {
-        end - start
-    } else {
-        end + day - start
-    };
-    let fish_uptime = pat_uptime * (window_len as f64 / day as f64);
     let item_name = |id: u32| {
         fd.item_by_id(id)
             .map(|item| item.name().to_string())
@@ -270,20 +266,60 @@ pub fn get_fish_next_window(
             .fish_by_id(fish_id)
             .ok_or_else(|| JsValue::from_str("Fish not found"))?;
         let eorzea_time = EorzeaTime::from_esecs(timestamp_esec);
-        let max_lookahead = 10000u32;
-        let window = fish.next_window_with_fish_eyes(
-            eorzea_time,
-            true,
-            filter_intuition,
-            use_fish_eyes,
-            DEFAULT_INTUITION_LOOKBACK_MINUTES,
-            max_lookahead,
-        );
+        let window = if filter_intuition {
+            NEXT_WINDOW_CACHE
+                .with(|cell| cell.borrow_mut().next_window(fd, fish_id, eorzea_time, use_fish_eyes))
+        } else {
+            fish.next_window(
+                eorzea_time,
+                true,
+                false,
+                use_fish_eyes,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10000,
+            )
+        };
         match window {
             Some(fw) => serde_json::to_string(&Some(fish_window_to_info(&fw, fd))),
             None => serde_json::to_string::<Option<FishWindow>>(&None),
         }
         .map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
+pub fn filter_fish(query: &str, timestamp_esec: u64, use_fish_eyes: bool) -> Result<String, JsValue> {
+    with_fish_data(|fd| {
+        let now = EorzeaTime::from_esecs(timestamp_esec);
+        let ids = NEXT_WINDOW_CACHE
+            .with(|cell| filter::filter_fish(fd, &mut cell.borrow_mut(), query, now, use_fish_eyes));
+        serde_json::to_string(&ids).map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
+pub fn get_next_windows(
+    fish_ids_json: &str,
+    timestamp_esec: u64,
+    use_fish_eyes: bool,
+) -> Result<String, JsValue> {
+    let fish_ids: Vec<u32> = serde_json::from_str(fish_ids_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid fish ids JSON: {e}")))?;
+    with_fish_data(|fd| {
+        let now = EorzeaTime::from_esecs(timestamp_esec);
+        let entries: Vec<FishWindowEntry> = NEXT_WINDOW_CACHE.with(|cell| {
+            let mut cache = cell.borrow_mut();
+            fish_ids
+                .iter()
+                .map(|id| FishWindowEntry {
+                    id: *id,
+                    window: cache
+                        .next_window(fd, *id, now, use_fish_eyes)
+                        .map(|window| fish_window_to_info(&window, fd)),
+                })
+                .collect()
+        });
+        serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
     })
 }
 

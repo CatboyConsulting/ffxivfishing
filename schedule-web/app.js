@@ -11,6 +11,8 @@ import init, {
   get_fish,
   list_all_fish_info,
   get_fish_next_window,
+  get_next_windows,
+  filter_fish,
   get_fish_windows_in_schedule,
   unix_to_eorzea_esec,
   unix_from_eorzea_time,
@@ -97,16 +99,6 @@ function formatRealDuration(seconds) {
   );
 }
 
-function parseWithinSeconds(raw) {
-  const match = /^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/i.exec(String(raw).trim());
-  if (!match) return NaN;
-  const value = parseFloat(match[1]);
-  if (!Number.isFinite(value)) return NaN;
-  const unit = (match[2] || "m").toLowerCase();
-  const multiplier = { s: 1, m: 60, h: 3600, d: 86400 }[unit];
-  return value * multiplier;
-}
-
 function formatLocalWindow(start, end) {
   const startDate = start.toLocaleDateString();
   const endDate = end.toLocaleDateString();
@@ -171,20 +163,10 @@ function isPrerequisiteAlwaysUp(prerequisite) {
   );
 }
 
-let _nextWindowCacheMinute = -1;
-const _nextWindowCache = new Map();
-
 function getNextFishWindow(id, nowUnix, nowEorzea) {
-  const minute = Math.floor(nowUnix / 60);
-  if (minute !== _nextWindowCacheMinute) {
-    _nextWindowCacheMinute = minute;
-    _nextWindowCache.clear();
-  }
   const useFishEyes = Boolean(
     document.getElementById("use-fish-eyes")?.checked,
   );
-  const cacheKey = `${id}:${useFishEyes}`;
-  if (_nextWindowCache.has(cacheKey)) return _nextWindowCache.get(cacheKey);
   try {
     const nextJson = get_fish_next_window(
       id,
@@ -192,12 +174,24 @@ function getNextFishWindow(id, nowUnix, nowEorzea) {
       FILTER_INTUITION,
       useFishEyes,
     );
-    const next = JSON.parse(nextJson);
-    _nextWindowCache.set(cacheKey, next);
-    return next;
+    return JSON.parse(nextJson);
   } catch {
-    _nextWindowCache.set(cacheKey, null);
     return null;
+  }
+}
+
+function getNextWindows(ids, nowEorzea) {
+  const useFishEyes = Boolean(
+    document.getElementById("use-fish-eyes")?.checked,
+  );
+  try {
+    const raw = get_next_windows(JSON.stringify(ids), nowEorzea, useFishEyes);
+    const entries = JSON.parse(raw);
+    const map = new Map();
+    for (const entry of entries) map.set(entry.id, entry.window);
+    return map;
+  } catch {
+    return new Map();
   }
 }
 
@@ -2064,7 +2058,6 @@ function applyConfig() {
     p.schedule.push({ startSec: 0, endSec: 86400 });
   }
   saveSearch(p);
-  _nextWindowCache.clear();
   renderFishList();
   startNotificationTimer();
 }
@@ -2402,16 +2395,24 @@ function hydrateFishNextWindows(elements) {
   const gen = _fishHydrationGen;
   let i = 0;
   const CHUNK = 8;
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
   function processChunk() {
     if (gen !== _fishHydrationGen) return;
-    const nowUnix = Math.floor(Date.now() / 1000);
-    const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
     const end = Math.min(i + CHUNK, elements.length);
+    const chunk = [];
     for (; i < end; i++) {
       const el = elements[i];
       if (!el.isConnected) continue;
+      chunk.push(el);
+    }
+    const windowsById = getNextWindows(
+      chunk.map((el) => parseInt(el.dataset.fishId, 10)),
+      nowEorzea,
+    );
+    for (const el of chunk) {
       const fishId = parseInt(el.dataset.fishId, 10);
-      const next = getNextFishWindow(fishId, nowUnix, nowEorzea);
+      const next = windowsById.get(fishId);
       if (next) {
         const startUnix = next.start;
         const endUnix = next.end;
@@ -2455,41 +2456,12 @@ function renderFishList() {
 
   let filtered = _allFishInfo;
   if (q) {
-    const parts = q.split("&&").map((s) => s.trim());
-    for (const part of parts) {
-      const pq = part.toLowerCase();
-      if (pq.startsWith("zone:")) {
-        const zoneQ = pq.slice(5);
-        filtered = filtered.filter(
-          (f) =>
-            f.region.toLowerCase().includes(zoneQ) ||
-            f.spot.name.toLowerCase().includes(zoneQ),
-        );
-      } else if (pq.startsWith("patch:")) {
-        const patchQ = pq.slice(6);
-        filtered = filtered.filter((f) => f.patch.includes(patchQ));
-      } else if (pq.startsWith("uptime>") || pq.startsWith("uptime<")) {
-        const op = pq[6];
-        const raw = part.slice(7);
-        const isPct = raw.endsWith("%");
-        const val = parseFloat(isPct ? raw.slice(0, -1) : raw);
-        if (isNaN(val)) continue;
-        const threshold = isPct ? val / 100 : val;
-        filtered = filtered.filter((f) =>
-          op === ">" ? f.fishUptime > threshold : f.fishUptime < threshold,
-        );
-      } else if (pq.startsWith("within:")) {
-        const withinSecs = parseWithinSeconds(part.slice(7));
-        if (!Number.isFinite(withinSecs) || withinSecs < 0) continue;
-        const horizon = nowUnix + withinSecs;
-        filtered = filtered.filter((f) => {
-          const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
-          return !!next && next.start <= horizon && next.end > nowUnix;
-        });
-      } else {
-        filtered = filtered.filter((f) => f.name.toLowerCase().includes(pq));
-      }
-    }
+    const useFishEyes = Boolean(
+      document.getElementById("use-fish-eyes")?.checked,
+    );
+    const matchedIds = JSON.parse(filter_fish(q, nowEorzea, useFishEyes));
+    const idSet = new Set(matchedIds);
+    filtered = filtered.filter((f) => idSet.has(f.id));
   }
 
   if (hideCaught) {

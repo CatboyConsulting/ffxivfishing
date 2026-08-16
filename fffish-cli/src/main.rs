@@ -216,7 +216,7 @@ impl App {
                                 .bait_id()
                                 .and_then(|id| self.fish_data.item_by_id(id))
                                 .cloned(),
-                            next_window,
+                            next_window: *next_window.as_time_span(),
                             favourite: self.is_favourite(f.id),
                             caught: self.is_caught(f.id),
                         })
