@@ -383,6 +383,46 @@ td {
   background: var(--bg-hover);
 }
 
+#saved-windows-list .saved-item .mark-caught-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--bg-border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0 6px;
+  min-width: 56px;
+  min-height: 24px;
+  font-size: 0.8rem;
+  color: var(--text-accent);
+  white-space: nowrap;
+}
+
+#saved-windows-list .saved-item .mark-caught-btn:hover {
+  background: var(--bg-medium);
+}
+
+#saved-windows-list .saved-item .mark-caught-btn.caught {
+  color: var(--text-success);
+  border-color: var(--text-success);
+}
+
+#saved-windows-list .saved-item .mark-caught-btn.morphing {
+  animation: caughtPop 0.4s ease;
+}
+
+@keyframes caughtPop {
+  0% {
+    background-color: color-mix(in srgb, var(--bg-primary) 45%, transparent);
+    color: var(--text-success);
+  }
+  100% {
+    background-color: var(--bg-hover);
+  }
+}
+
+#saved-windows-list .saved-item .mark-caught-btn[hidden] {
+  display: none;
+}
+
 #saved-windows-empty {
   color: var(--text-muted);
   font-size: 0.85rem;

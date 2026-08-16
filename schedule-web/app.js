@@ -135,6 +135,12 @@ function fmtSavedWhen(startUnix, endUnix, nowUnix) {
   };
 }
 
+const MARK_CAUGHT_GRACE_SECONDS = 5 * 60;
+
+function isMarkCaughtEligible(startUnix, endUnix, nowUnix) {
+  return nowUnix >= startUnix && nowUnix <= endUnix + MARK_CAUGHT_GRACE_SECONDS;
+}
+
 function isAlwaysUp(fish) {
   return Number.isFinite(fish.fishUptime) && fish.fishUptime >= 1;
 }
@@ -163,7 +169,7 @@ function isPrerequisiteAlwaysUp(prerequisite) {
   );
 }
 
-function getNextFishWindow(id, nowUnix, nowEorzea) {
+function getNextFishWindow(id, nowEorzea) {
   const useFishEyes = Boolean(
     document.getElementById("use-fish-eyes")?.checked,
   );
@@ -223,10 +229,7 @@ function applyTheme(theme, { persist = false } = {}) {
   document.documentElement.dataset.theme = theme;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute(
-      "content",
-      theme === "light" ? "#f4f1ea" : "#14141e",
-    );
+    meta.setAttribute("content", theme === "light" ? "#f4f1ea" : "#14141e");
   }
   const btn = document.getElementById("theme-toggle");
   if (btn) {
@@ -378,7 +381,7 @@ function readForm() {
   };
 }
 
-function withTimeout(promise, milliseconds) {
+async function withTimeout(promise, milliseconds) {
   let timeoutId;
   const timeout = new Promise((_, reject) => {
     timeoutId = setTimeout(
@@ -386,9 +389,11 @@ function withTimeout(promise, milliseconds) {
       milliseconds,
     );
   });
-  return Promise.race([promise, timeout]).finally(() => {
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
     clearTimeout(timeoutId);
-  });
+  }
 }
 
 async function query(formData, trigger) {
@@ -404,7 +409,8 @@ async function query(formData, trigger) {
     const nowUnix = Math.floor(Date.now() / 1000);
     const nowEorzea = unix_to_eorzea_esec(BigInt(nowUnix));
     const timeperiodSecs = BigInt(formData.days * 86400);
-    const timezoneOffsetSecs = -new Date(nowUnix * 1000).getTimezoneOffset() * 60;
+    const timezoneOffsetSecs =
+      -new Date(nowUnix * 1000).getTimezoneOffset() * 60;
     const limit = formData.limit || 100;
 
     elStatus.textContent = `Searching the next ${formData.days} day(s) for windows...`;
@@ -412,7 +418,7 @@ async function query(formData, trigger) {
     await new Promise((r) => setTimeout(r, 0));
     if (queryGeneration !== _queryGeneration) return;
 
-    const fishInfo = JSON.parse(await get_fish(formData.fishId));
+    const fishInfo = JSON.parse(get_fish(formData.fishId));
     if (queryGeneration !== _queryGeneration) return;
     _lastFishName = fishInfo.name;
     document.getElementById("results-fish-name").textContent =
@@ -872,9 +878,7 @@ function isSavedWindow(value) {
 }
 
 function fishNameById(id) {
-  return (
-    _allFishInfo.find((fish) => fish.id === id)?.name || `Fish #${id}`
-  );
+  return _allFishInfo.find((fish) => fish.id === id)?.name || `Fish #${id}`;
 }
 
 function migrateSavedWindows() {
@@ -1252,8 +1256,7 @@ let _audioCtx = null;
 
 function getAudioContext() {
   if (_audioCtx) return _audioCtx;
-  const AudioContextCtor =
-    window.AudioContext || window.webkitAudioContext;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextCtor) return null;
   _audioCtx = new AudioContextCtor();
   return _audioCtx;
@@ -1282,6 +1285,11 @@ const SOUNDS = {
     tone(ctx, t + 0.14, 990, 0.24, "sine", 0.28);
   },
   chirp: (ctx, t) => tone(ctx, t, 440, 0.28, "sine", 0.28, 1320),
+  catch: (ctx, t) => {
+    tone(ctx, t, 523.25, 0.15, "sine", 0.26);
+    tone(ctx, t + 0.08, 659.25, 0.15, "sine", 0.26);
+    tone(ctx, t + 0.16, 783.99, 0.26, "sine", 0.28);
+  },
 };
 
 function playSound(name) {
@@ -1305,6 +1313,12 @@ function playWindowEndSound() {
   const settings = getSoundSettings();
   if (!settings.enabled) return;
   playSound("chirp");
+}
+
+function playCatchSound() {
+  const settings = getSoundSettings();
+  if (!settings.enabled) return;
+  playSound("catch");
 }
 
 function initializeSoundControls() {
@@ -1395,7 +1409,9 @@ function downloadSavedIcs() {
   const saved = getSavedWindows();
   if (saved.length === 0) return;
   downloadIcsCalendar(
-    saved.map((w) => icsVevent(w, fishNameById(w.fishId), getIcsAlarmMinutes())),
+    saved.map((w) =>
+      icsVevent(w, fishNameById(w.fishId), getIcsAlarmMinutes()),
+    ),
     "saved-windows.ics",
     "//saved-windows//EN",
   );
@@ -1493,6 +1509,7 @@ function renderSavedWindows() {
   dlBtn.style.display = "";
 
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const caughtList = getList(CAUGHT_KEY);
 
   for (const w of saved) {
     const startUnix = w.start;
@@ -1507,6 +1524,12 @@ function renderSavedWindows() {
     const { displayWhen, state } = fmtSavedWhen(startUnix, endUnix, nowUnix);
     const hasNote = getNote(w.fishId).length > 0;
     const fishName = fishNameById(w.fishId);
+    const fishCaught = caughtList.includes(w.fishId);
+    const markCaughtEligible = isMarkCaughtEligible(
+      startUnix,
+      endUnix,
+      nowUnix,
+    );
 
     const div = document.createElement("div");
     div.className = `saved-item ${state}`;
@@ -1522,6 +1545,7 @@ function renderSavedWindows() {
           <span class="fish-name truncate" tabindex="0" role="button" aria-label="Show schedule for ${escapeHtml(fishName)}">${escapeHtml(fishName)}${hasNote ? `<span class="saved-note-indicator" title="Has note">&#128221;</span>` : ""}${fishEyesIndicator(w)}</span>
           <span class="window-when">${escapeHtml(displayWhen)}</span>
           <span class="saved-actions">
+            <button type="button" class="mark-caught-btn${fishCaught ? " caught" : ""}" aria-pressed="${fishCaught}" title="${fishCaught ? `Mark ${escapeHtml(fishName)} as uncaught` : `Mark ${escapeHtml(fishName)} as caught`}" aria-label="${fishCaught ? `Mark ${escapeHtml(fishName)} as uncaught` : `Mark ${escapeHtml(fishName)} as caught`}"${markCaughtEligible ? "" : " hidden"}>${fishCaught ? "&#10003;" : "Caught"}</button>
             <button type="button" class="dl-single" title="Download .ics" aria-label="Download saved window as calendar file">&#128197;&#11015;</button>
             ${getGoogleCalendarEnabled() ? `<button type="button" class="dl-gcal" title="Add to Google Calendar" aria-label="Add saved window to Google Calendar">&#128197;<span class="gcal-logo">G</span></button>` : ""}
             <button type="button" class="remove-saved" title="Remove" aria-label="Remove saved window">&#10005;</button>
@@ -1562,6 +1586,19 @@ function renderSavedWindows() {
     div.querySelector(".remove-saved").addEventListener("click", () => {
       removeSavedWindow(w);
     });
+    const markBtn = div.querySelector(".mark-caught-btn");
+    if (markBtn) {
+      markBtn.addEventListener("click", () => {
+        const nowCaught = !getList(CAUGHT_KEY).includes(w.fishId);
+        if (nowCaught) {
+          markBtn.textContent = "\u2713";
+          markBtn.classList.add("caught", "morphing");
+          markBtn.title = `Mark ${fishName} as uncaught`;
+          markBtn.setAttribute("aria-pressed", "true");
+        }
+        setCaught(w.fishId, nowCaught);
+      });
+    }
     div.querySelector(".dl-single").addEventListener("click", () => {
       downloadSavedIcsItem(w);
     });
@@ -1639,6 +1676,10 @@ function updateSavedWindowTimers() {
         );
       }
       updateSavedWindowProgress(div, nowUnix, state);
+      const markBtn = div.querySelector(".mark-caught-btn");
+      if (markBtn) {
+        markBtn.hidden = !isMarkCaughtEligible(startUnix, endUnix, nowUnix);
+      }
     });
   updateSavedWindowPrereqStatuses(nowUnix);
   updateSavedNavCountdown();
@@ -1662,6 +1703,7 @@ function startSavedWindowTimer() {
   const nowUnix = Math.floor(Date.now() / 1000);
   let hasActiveWindow = false;
   let hasMonitorWindow = false;
+  let hasMarkCaughtWindow = false;
   let nextStart = Infinity;
   for (const w of saved) {
     const startUnix = w.start;
@@ -1676,6 +1718,10 @@ function startSavedWindowTimer() {
       nextStart = startUnix;
     }
 
+    if (isMarkCaughtEligible(startUnix, endUnix, nowUnix)) {
+      hasMarkCaughtWindow = true;
+    }
+
     const monitor = getIntuitionMonitorRange(w);
     if (monitor) {
       if (nowUnix >= monitor.start && nowUnix < monitor.end) {
@@ -1687,18 +1733,25 @@ function startSavedWindowTimer() {
     }
   }
 
-  if (!hasActiveWindow && !hasMonitorWindow && nextStart === Infinity) return;
+  if (
+    !hasActiveWindow &&
+    !hasMarkCaughtWindow &&
+    !hasMonitorWindow &&
+    nextStart === Infinity
+  )
+    return;
 
   const diff = nextStart - nowUnix;
-  const interval = hasActiveWindow
-    ? 1000
-    : hasMonitorWindow
-      ? INTUITION_UPDATE_INTERVAL_MS
-      : diff <= 120
-        ? 1000
-        : diff > 3600
-          ? 900000
-          : Math.min(60000, Math.max(1000, diff * 1000));
+  const interval =
+    hasActiveWindow || hasMarkCaughtWindow
+      ? 1000
+      : hasMonitorWindow
+        ? INTUITION_UPDATE_INTERVAL_MS
+        : diff <= 120
+          ? 1000
+          : diff > 3600
+            ? 900000
+            : Math.min(60000, Math.max(1000, diff * 1000));
 
   _savedTimerId = setInterval(() => {
     updateSavedWindowTimers();
@@ -2064,7 +2117,7 @@ async function main() {
   try {
     elStatus.textContent = "Initializing WASM...";
     await init();
-    await init_default();
+    init_default();
     _wasmReady = true;
     migrateSavedWindows();
     renderSavedWindows();
@@ -2072,7 +2125,7 @@ async function main() {
     startNotificationTimer();
     // preload fish list data
     try {
-      const raw = await list_all_fish_info();
+      const raw = list_all_fish_info();
       _allFishInfo = JSON.parse(raw);
       for (const f of _allFishInfo) {
         f._effectiveAlwaysUp = computeEffectiveAlwaysUp(f, _allFishInfo);
@@ -2198,6 +2251,19 @@ function toggleCaught(id) {
   renderFishList();
 }
 
+function setCaught(id, caught) {
+  const list = getList(CAUGHT_KEY).filter((x) => x !== id);
+  if (caught) list.push(id);
+  setList(CAUGHT_KEY, list);
+  if (caught) playCatchSound();
+  renderFishList();
+  if (caught) {
+    setTimeout(renderSavedWindows, 180);
+  } else {
+    renderSavedWindows();
+  }
+}
+
 const SPOT_LINK_TARGETS = [
   {
     name: "FishStats",
@@ -2276,7 +2342,7 @@ function createFishCard(f, opts = {}) {
   } else if (opts.deferNextWindow) {
     nextStr = `<span class="fish-next-window fish-next-deferred" data-fish-id="${f.id}">...</span>`;
   } else {
-    const next = getNextFishWindow(f.id, nowUnix, nowEorzea);
+    const next = getNextFishWindow(f.id, nowEorzea);
     if (next) {
       const startUnix = next.start;
       const endUnix = next.end;
@@ -2332,8 +2398,7 @@ function createFishCard(f, opts = {}) {
   const activeSavedCount = opts.inline
     ? 0
     : getSavedWindows().filter(
-      (saved) =>
-        saved.fishId === f.id && saved.end > nowUnix,
+      (saved) => saved.fishId === f.id && saved.end > nowUnix,
     ).length;
   const displayName = `${f.name}${activeSavedCount ? ` (${activeSavedCount})` : ""}`;
   const localWindow = alwaysUp
@@ -2407,7 +2472,7 @@ function patchSortValue(patch) {
     : Infinity;
 }
 
-function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
+function compareFishBySort(a, b, sort, nowEorzea) {
   if (sort === "uptime") {
     const uptimeDiff = (a.fishUptime ?? Infinity) - (b.fishUptime ?? Infinity);
     if (uptimeDiff !== 0) return uptimeDiff;
@@ -2415,8 +2480,8 @@ function compareFishBySort(a, b, sort, nowUnix, nowEorzea) {
     const patchDiff = patchSortValue(b.patch) - patchSortValue(a.patch);
     if (patchDiff !== 0) return patchDiff;
   } else if (sort === "next-window") {
-    const aWindow = getNextFishWindow(a.id, nowUnix, nowEorzea);
-    const bWindow = getNextFishWindow(b.id, nowUnix, nowEorzea);
+    const aWindow = getNextFishWindow(a.id, nowEorzea);
+    const bWindow = getNextFishWindow(b.id, nowEorzea);
     if (aWindow && !bWindow) return -1;
     if (!aWindow && bWindow) return 1;
     if (aWindow && bWindow) {
@@ -2518,7 +2583,7 @@ function renderFishList() {
     const aFav = favSet.has(a.id) ? 0 : 1;
     const bFav = favSet.has(b.id) ? 0 : 1;
     if (aFav !== bFav) return aFav - bFav;
-    return compareFishBySort(a, b, sort, nowUnix, nowEorzea);
+    return compareFishBySort(a, b, sort, nowEorzea);
   });
 
   const total = _allFishInfo.length;
@@ -2601,7 +2666,11 @@ document.addEventListener("click", (e) => {
       .getElementById("filter-help")
       .setAttribute("aria-expanded", "false");
   }
-  if (_spotPopup && !e.target.closest(".spot-popup") && !e.target.closest(".spot-link")) {
+  if (
+    _spotPopup &&
+    !e.target.closest(".spot-popup") &&
+    !e.target.closest(".spot-link")
+  ) {
     closeSpotPopup();
   }
 });
@@ -2630,9 +2699,17 @@ fishScroll.addEventListener("scroll", handleScroll, { passive: true });
 document.addEventListener("scroll", handleScroll, { passive: true });
 
 scrollTopBtn.addEventListener("click", () => {
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  fishScroll.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
-  window.scrollTo({ top: 0, behavior: prefersReducedMotion ? "instant" : "smooth" });
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  fishScroll.scrollTo({
+    top: 0,
+    behavior: prefersReducedMotion ? "instant" : "smooth",
+  });
+  window.scrollTo({
+    top: 0,
+    behavior: prefersReducedMotion ? "instant" : "smooth",
+  });
 });
 
 // ---- mobile view switching (bottom nav) ----
