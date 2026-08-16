@@ -798,6 +798,34 @@ function parseLocalStorageImport(raw) {
   return values;
 }
 
+function exportCarbuncle() {
+  return JSON.stringify(getList(CAUGHT_KEY), null, 2);
+}
+
+function applyCarbuncleImport(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error("Import is not valid JSON.");
+  }
+  const ids = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && Array.isArray(data.completed)
+      ? data.completed
+      : null;
+  if (ids === null) {
+    throw new Error(
+      "Carbuncle Plushy import must be an array of fish IDs or an object with a 'completed' array.",
+    );
+  }
+  setList(
+    CAUGHT_KEY,
+    ids.filter((id) => Number.isInteger(id)),
+  );
+  renderFishList();
+}
+
 function applyLocalStorageImport(raw) {
   const values = parseLocalStorageImport(raw);
   const previous = new Map();
@@ -1881,11 +1909,18 @@ function closeResults() {
 
 let _importExportTrigger = null;
 
+function refreshExportField() {
+  const useCarbuncle = document.getElementById("carbuncle-format").checked;
+  document.getElementById("storage-export").value = useCarbuncle
+    ? exportCarbuncle()
+    : exportLocalStorage();
+}
+
 function openImportExport(trigger) {
   const panel = document.getElementById("import-export-modal");
   const overlay = document.getElementById("import-export-overlay");
   if (trigger) _importExportTrigger = trigger;
-  document.getElementById("storage-export").value = exportLocalStorage();
+  refreshExportField();
   document.getElementById("import-export-status").textContent = "";
   panel.classList.add("open");
   panel.setAttribute("aria-hidden", "false");
@@ -1951,8 +1986,13 @@ document
     const status = document.getElementById("import-export-status");
     status.className = "import-export-status";
     try {
-      applyLocalStorageImport(document.getElementById("storage-import").value);
-      document.getElementById("storage-export").value = exportLocalStorage();
+      const raw = document.getElementById("storage-import").value;
+      if (document.getElementById("carbuncle-format").checked) {
+        applyCarbuncleImport(raw);
+      } else {
+        applyLocalStorageImport(raw);
+      }
+      refreshExportField();
       status.className = "import-export-status success";
       status.textContent = "Imported data successfully.";
     } catch (error) {
@@ -1960,6 +2000,9 @@ document
       status.textContent = error.message;
     }
   });
+document
+  .getElementById("carbuncle-format")
+  .addEventListener("change", refreshExportField);
 document.addEventListener("keydown", (event) => {
   const resultsPanel = document.getElementById("results-panel");
   const importExportPanel = document.getElementById("import-export-modal");

@@ -1097,6 +1097,14 @@ footer {
   color: var(--text-primary);
 }
 
+.import-export-content .notification-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+}
+
 .import-export-content textarea {
   display: block;
   width: 100%;
