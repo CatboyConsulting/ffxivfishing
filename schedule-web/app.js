@@ -403,6 +403,13 @@ async function query(formData, trigger) {
     const elTbody = document.getElementById("tbody");
     const elTable = document.getElementById("results");
 
+    const ignoreSchedule = Boolean(
+      document.getElementById("results-ignore-schedule")?.checked,
+    );
+    const useFishEyes = Boolean(
+      document.getElementById("results-fish-eyes")?.checked,
+    );
+
     elTbody.innerHTML = "";
     elTable.style.display = "none";
 
@@ -422,7 +429,7 @@ async function query(formData, trigger) {
     if (queryGeneration !== _queryGeneration) return;
     _lastFishName = fishInfo.name;
     document.getElementById("results-fish-name").textContent =
-      fishInfo.name + (formData.useFishEyes === true ? " (Fish Eyes)" : "");
+      fishInfo.name + (useFishEyes ? " (Fish Eyes)" : "");
 
     // show fish info
     const infoBar = document.getElementById("fish-info-bar");
@@ -506,12 +513,14 @@ async function query(formData, trigger) {
       get_fish_windows_in_schedule(
         windowFishId,
         nowEorzea,
-        JSON.stringify(formData.schedule),
+        ignoreSchedule
+          ? JSON.stringify([{ startSec: 0, endSec: 86400 }])
+          : JSON.stringify(formData.schedule),
         timeperiodSecs,
         limit,
         timezoneOffsetSecs,
         FILTER_INTUITION,
-        formData.useFishEyes === true,
+        useFishEyes,
         true,
       ),
       10000,
@@ -520,15 +529,19 @@ async function query(formData, trigger) {
     const windows = JSON.parse(windowsJson);
     _lastWindows = windows;
 
-    elStatus.textContent = `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""} in the next ${formData.days} day(s).`;
+    const rangeDesc = ignoreSchedule
+      ? ` in the next ${formData.days} day(s) (ignoring schedule)`
+      : ` in the next ${formData.days} day(s)`;
+    elStatus.textContent = `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""}${rangeDesc}.`;
     elTable.style.display = "";
     const dlBtn = document.getElementById("download-ics");
     dlBtn.style.display = windows.length > 0 ? "" : "none";
 
     if (windows.length === 0) {
       const row = document.createElement("tr");
-      row.innerHTML =
-        '<td colspan="6">No windows found within the schedule.</td>';
+      row.innerHTML = ignoreSchedule
+        ? '<td colspan="6">No windows found.</td>'
+        : '<td colspan="6">No windows found within the schedule.</td>';
       elTbody.appendChild(row);
       openResults(trigger);
       return;
@@ -588,7 +601,7 @@ async function query(formData, trigger) {
     }
 
     elStatus.textContent =
-      `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""} in the next ${formData.days} day(s).` +
+      `Found ${windows.length} window(s)${windows.length >= limit ? " (limit)" : ""}${rangeDesc}.` +
       (savedCount ? ` ${savedCount} saved.` : "");
     updateSaveButtons();
     openResults(trigger);
@@ -1569,6 +1582,7 @@ function renderSavedWindows() {
       if (p.schedule.length === 0)
         p.schedule.push({ startSec: 0, endSec: 86400 });
       saveSearch(p);
+      syncResultsToggles(p);
       const elStatus = document.getElementById("status");
       elStatus.className = "status";
       query(p, savedFish).catch((err) => {
@@ -1959,6 +1973,35 @@ function closeResults() {
   }
   _resultsTrigger = null;
 }
+
+function syncResultsToggles(p) {
+  const fishEyes = document.getElementById("results-fish-eyes");
+  const ignoreSchedule = document.getElementById("results-ignore-schedule");
+  if (fishEyes) fishEyes.checked = p.useFishEyes === true;
+  if (ignoreSchedule) ignoreSchedule.checked = false;
+}
+
+function requeryResults() {
+  const p = readForm();
+  if (p.schedule.length === 0) {
+    p.schedule.push({ startSec: 0, endSec: 86400 });
+  }
+  const elStatus = document.getElementById("status");
+  elStatus.className = "status";
+  query(p, _resultsTrigger || document.getElementById("results-close")).catch(
+    (err) => {
+      elStatus.className = "status error";
+      elStatus.textContent = `Error: ${err}`;
+    },
+  );
+}
+
+document
+  .getElementById("results-ignore-schedule")
+  .addEventListener("change", requeryResults);
+document
+  .getElementById("results-fish-eyes")
+  .addEventListener("change", requeryResults);
 
 let _importExportTrigger = null;
 
@@ -2430,6 +2473,7 @@ function createFishCard(f, opts = {}) {
     if (p.schedule.length === 0)
       p.schedule.push({ startSec: 0, endSec: 86400 });
     saveSearch(p);
+    syncResultsToggles(p);
     const elStatus = document.getElementById("status");
     elStatus.className = "status";
     query(p, fishBody).catch((err) => {

@@ -1001,6 +1001,38 @@ td {
   color: var(--text-heading);
 }
 
+.results-panel .panel-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--bg-border);
+}
+
+.results-panel .panel-toggles .toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.results-panel .panel-toggles .toggle input[type="checkbox"] {
+  accent-color: var(--bg-primary);
+  flex: none;
+  margin: 0;
+}
+
+.results-panel .panel-toggles .toggle input:checked ~ .toggle-label {
+  color: var(--text-heading);
+}
+
+.results-panel .panel-toggles .toggle-label {
+  white-space: nowrap;
+}
+
 .results-panel .panel-status {
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--bg-border);
