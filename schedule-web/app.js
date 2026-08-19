@@ -598,6 +598,18 @@ async function query(formData, trigger) {
         `;
         elTbody.appendChild(detailRow);
       }
+
+      const moochInfo = moochInfoHtml(w, "mooch-detail", true);
+      if (moochInfo) {
+        const moochRow = document.createElement("tr");
+        moochRow.className = "mooch-detail-row";
+        moochRow.innerHTML = `
+          <td colspan="6">
+            ${moochInfo}
+          </td>
+        `;
+        elTbody.appendChild(moochRow);
+      }
     }
 
     elStatus.textContent =
@@ -1455,7 +1467,7 @@ function intuitionInfoHtml(
       const prerequisiteEndUnix = prerequisite.end;
       const prerequisiteStart = new Date(prerequisiteStartUnix * 1000);
       const prerequisiteEnd = new Date(prerequisiteEndUnix * 1000);
-      const fishName = fishNameById(prerequisite.fishId);
+      const fishName = prerequisite.fish || fishNameById(prerequisite.fishId);
       const eorzeaStart = etClock(prerequisiteStartUnix);
       const eorzeaEnd = etClock(prerequisiteEndUnix);
       const alwaysUp = eorzeaStart === "00:00" && eorzeaEnd === "00:00";
@@ -1491,6 +1503,56 @@ function intuitionInfoHtml(
     <div class="${containerClass}">
       <strong>${escapeHtml(title)}</strong>
       <ol>${prerequisiteLines}</ol>
+    </div>`;
+}
+
+function moochInfoHtml(w, containerClass, showStatus) {
+  const moochFish = w.mooch?.moochFish;
+  if (!moochFish?.length) return "";
+  const title = "Mooch";
+
+  const moochLines = moochFish
+    .map((entry) => {
+      const startUnix = entry.start;
+      const endUnix = entry.end;
+      const start = new Date(startUnix * 1000);
+      const end = new Date(endUnix * 1000);
+      const fishName = entry.fish || fishNameById(entry.fishId);
+      const eorzeaStart = etClock(startUnix);
+      const eorzeaEnd = etClock(endUnix);
+      const alwaysUp = eorzeaStart === "00:00" && eorzeaEnd === "00:00";
+      const localWindow = alwaysUp
+        ? "always up"
+        : formatLocalWindow(start, end);
+      const eorzeaWindow = alwaysUp
+        ? "always up"
+        : `${eorzeaStart} - ${eorzeaEnd}`;
+      const timeWindow = alwaysUp
+        ? `<span class="intuition-prerequisite-local">${localWindow}</span>`
+        : `<span class="intuition-prerequisite-et">ET ${escapeHtml(eorzeaWindow)}</span>
+          <span class="intuition-prerequisite-separator"> | </span>
+          <span class="intuition-prerequisite-local">${escapeHtml(localWindow)}</span>`;
+      let statusHtml = "";
+      if (showStatus && !alwaysUp) {
+        const { label, state } = fmtPrereqStatus(
+          startUnix,
+          endUnix,
+          Math.floor(Date.now() / 1000),
+        );
+        statusHtml = `<span class="intuition-prerequisite-status ${state}" data-prereq-start="${startUnix}" data-prereq-end="${endUnix}">${escapeHtml(label)}</span>`;
+      }
+      return `
+        <li>
+          <span class="intuition-prerequisite-fish">${escapeHtml(fishName)}${fishEyesIndicator(entry)}${statusHtml}</span>
+          <span class="intuition-prerequisite-window">${timeWindow}</span>
+        </li>`;
+    })
+    .join("");
+
+  return `
+    <div class="${containerClass}">
+      <strong>${escapeHtml(title)}</strong>
+      <ol>${moochLines}</ol>
     </div>`;
 }
 
@@ -1573,6 +1635,7 @@ function renderSavedWindows() {
         ?.intuitionLengthSeconds,
       true,
     )}
+        ${moochInfoHtml(w, "saved-mooch-setup", true)}
       </div>
     `;
     const savedFish = div.querySelector(".fish-name");

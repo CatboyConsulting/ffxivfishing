@@ -68,6 +68,8 @@ struct FishWindow {
     fish_eyes: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     intuition: Option<IntuitionWindowInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mooch: Option<MoochWindowInfo>,
 }
 
 #[derive(Serialize)]
@@ -81,6 +83,23 @@ struct IntuitionWindowInfo {
 struct IntuitionWindowSetupInfo {
     amount: u8,
     fish_id: u32,
+    fish: String,
+    fish_eyes: bool,
+    start: u64,
+    end: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MoochWindowInfo {
+    mooch_fish: Vec<MoochWindowSetupInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MoochWindowSetupInfo {
+    fish_id: u32,
+    fish: String,
     fish_eyes: bool,
     start: u64,
     end: u64,
@@ -201,7 +220,12 @@ fn fish_to_info(fish: &Fish, fd: &FishData) -> FishInfo {
     }
 }
 
-fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, _fd: &FishData) -> FishWindow {
+fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, fd: &FishData) -> FishWindow {
+    let item_name = |id: u32| {
+        fd.item_by_id(id)
+            .map(|item| item.name().to_string())
+            .unwrap_or_else(|| format!("Fish #{id}"))
+    };
     let intuition = window.intuition().map(|intuition| IntuitionWindowInfo {
         prerequisite_windows: intuition
             .prerequisite_windows()
@@ -209,6 +233,20 @@ fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, _fd: &FishData) 
             .map(|setup| IntuitionWindowSetupInfo {
                 amount: setup.amount(),
                 fish_id: setup.fish(),
+                fish: item_name(setup.fish()),
+                fish_eyes: setup.uses_fish_eyes(),
+                start: setup.window().start().unix_secs(),
+                end: setup.window().end().unix_secs(),
+            })
+            .collect(),
+    });
+    let mooch = window.mooch().map(|mooch| MoochWindowInfo {
+        mooch_fish: mooch
+            .mooch_fish()
+            .iter()
+            .map(|setup| MoochWindowSetupInfo {
+                fish_id: setup.fish(),
+                fish: item_name(setup.fish()),
                 fish_eyes: setup.uses_fish_eyes(),
                 start: setup.window().start().unix_secs(),
                 end: setup.window().end().unix_secs(),
@@ -220,6 +258,7 @@ fn fish_window_to_info(window: &ffxivfishing::fish::FishWindow, _fd: &FishData) 
         end: window.end().unix_secs(),
         fish_eyes: window.uses_fish_eyes(),
         intuition,
+        mooch,
     }
 }
 
@@ -633,5 +672,57 @@ mod tests {
             DEFAULT_INTUITION_LOOKBACK_MINUTES,
         );
         assert_eq!(windows.len(), 1);
+    }
+
+    #[test]
+    fn mooch_window_includes_mooch_fish() {
+        let data = carbuncledata::carbuncle_fishes().unwrap();
+        let shonisaurus = data.fish_by_id(8772).unwrap();
+        let window = shonisaurus
+            .next_window(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                false,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .expect("Shonisaurus should have a window");
+        let json = serde_json::to_value(fish_window_to_info(&window, &data)).unwrap();
+
+        let mooch_fish = json["mooch"]["moochFish"].as_array().unwrap();
+        assert_eq!(mooch_fish.len(), 2);
+        assert_eq!(mooch_fish[0]["fishId"], 5040);
+        assert_eq!(mooch_fish[0]["fish"], "Cloud Cutter");
+        assert_eq!(mooch_fish[1]["fishId"], 8771);
+        assert_eq!(mooch_fish[1]["fish"], "Mahar");
+        assert_eq!(mooch_fish[0]["fishEyes"], false);
+        assert_eq!(mooch_fish[1]["fishEyes"], false);
+        assert!(mooch_fish[0]["start"].as_u64().unwrap() < mooch_fish[0]["end"].as_u64().unwrap());
+        assert!(mooch_fish[1]["start"].as_u64().unwrap() < mooch_fish[1]["end"].as_u64().unwrap());
+    }
+
+    #[test]
+    fn intuition_prerequisite_includes_name_for_locationless_fish() {
+        let data = carbuncledata::carbuncle_fishes().unwrap();
+        let problematicus = data.fish_by_id(17588).unwrap();
+        let window = problematicus
+            .next_window(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                false,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .expect("Problematicus should have an intuition window");
+        let json = serde_json::to_value(fish_window_to_info(&window, &data)).unwrap();
+
+        let prerequisites = json["intuition"]["prerequisiteWindows"].as_array().unwrap();
+        let granite = prerequisites
+            .iter()
+            .find(|p| p["fishId"] == 12754)
+            .expect("Problematicus should require Granite Crab");
+        assert_eq!(granite["fish"], "Granite Crab");
     }
 }

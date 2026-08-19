@@ -354,6 +354,7 @@ pub struct Fish {
     pub tug: Tug,
     pub hookset: Hookset,
     pub intuition: Option<Intuition>,
+    resolved_mooch: Option<Vec<(u32, Option<FishWindowDefinition>)>>,
     pub lure: Lure,
     pub lure_proc: bool,
     pub snagging: bool,
@@ -370,14 +371,21 @@ pub struct FishWindow {
     span: EorzeaTimeSpan,
     fish_eyes: bool,
     intuition: Option<IntuitionWindow>,
+    mooch: Option<MoochWindow>,
 }
 
 impl FishWindow {
-    fn new(span: EorzeaTimeSpan, fish_eyes: bool, intuition: Option<IntuitionWindow>) -> Self {
+    fn new(
+        span: EorzeaTimeSpan,
+        fish_eyes: bool,
+        intuition: Option<IntuitionWindow>,
+        mooch: Option<MoochWindow>,
+    ) -> Self {
         Self {
             span,
             fish_eyes,
             intuition,
+            mooch,
         }
     }
 
@@ -401,8 +409,44 @@ impl FishWindow {
         self.intuition.as_ref()
     }
 
+    pub fn mooch(&self) -> Option<&MoochWindow> {
+        self.mooch.as_ref()
+    }
+
     pub fn as_time_span(&self) -> &EorzeaTimeSpan {
         &self.span
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MoochWindow {
+    mooch_fish: Vec<MoochWindowSetup>,
+}
+
+impl MoochWindow {
+    pub fn mooch_fish(&self) -> &[MoochWindowSetup] {
+        &self.mooch_fish
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MoochWindowSetup {
+    fish: u32,
+    window: EorzeaTimeSpan,
+    fish_eyes: bool,
+}
+
+impl MoochWindowSetup {
+    pub fn fish(&self) -> u32 {
+        self.fish
+    }
+
+    pub fn window(&self) -> &EorzeaTimeSpan {
+        &self.window
+    }
+
+    pub fn uses_fish_eyes(&self) -> bool {
+        self.fish_eyes
     }
 }
 
@@ -598,6 +642,7 @@ impl Fish {
             tug,
             hookset,
             intuition,
+            resolved_mooch: None,
             lure,
             lure_proc,
             snagging,
@@ -636,11 +681,13 @@ impl Fish {
                     && self.fish_eyes
                     && !self.is_always_available()
                     && !self.natural_window_contains(&window);
-                return Some(FishWindow::new(window, uses_fish_eyes, None));
+                let mooch = self.mooch_window(&window, use_fish_eyes);
+                return Some(FishWindow::new(window, uses_fish_eyes, None, mooch));
             }
             match self.intuition_window(&window, intuition_lookback_minutes, use_fish_eyes) {
                 Some((window, uses_fish_eyes, intuition)) if window.end() > time => {
-                    return Some(FishWindow::new(window, uses_fish_eyes, intuition));
+                    let mooch = self.mooch_window(&window, use_fish_eyes);
+                    return Some(FishWindow::new(window, uses_fish_eyes, intuition, mooch));
                 }
                 _ => (),
             }
@@ -841,6 +888,30 @@ impl Fish {
         Some((intuition_window, prerequisite_windows))
     }
 
+    fn mooch_window(&self, window: &EorzeaTimeSpan, use_fish_eyes: bool) -> Option<MoochWindow> {
+        let mooch = self.resolved_mooch.as_ref()?;
+        let start = window.start() - EORZEA_SUN;
+        let end = window.end();
+        let mut mooch_fish = Vec::new();
+        for (id, definition) in mooch {
+            let definition = definition.as_ref()?;
+            let windows = definition.last_windows_in(start, end, use_fish_eyes);
+            let (mooch_window, fish_eyes) = match windows.without_fish_eyes {
+                Some(window) => (window, false),
+                None => match windows.with_fish_eyes {
+                    Some(window) => (window, true),
+                    None => return None,
+                },
+            };
+            mooch_fish.push(MoochWindowSetup {
+                fish: *id,
+                window: mooch_window,
+                fish_eyes,
+            });
+        }
+        Some(MoochWindow { mooch_fish })
+    }
+
     fn natural_window_contains(&self, window: &EorzeaTimeSpan) -> bool {
         let definition = self.window_definition(false);
         let mut day = window.start();
@@ -1039,6 +1110,32 @@ impl FishData {
                         .collect(),
                 );
             }
+
+            if let Bait::Mooch { fish_ids, .. } = &fish.bait {
+                if !fish_ids.is_empty() {
+                    let location = Rc::clone(&fish.location);
+                    fish.resolved_mooch = Some(
+                        fish_ids
+                            .iter()
+                            .map(|id| {
+                                let definition = definitions.get(id).cloned().unwrap_or_else(|| {
+                                    // Mooch fish missing from the data are treated as always up.
+                                    FishWindowDefinition {
+                                        location: Rc::clone(&location),
+                                        window_start: EorzeaDuration::from_esecs(0),
+                                        window_end: EorzeaDuration::from_esecs(0),
+                                        fish_eyes: false,
+                                        collectable: false,
+                                        previous_weather_set: Rc::from([]),
+                                        weather_set: Rc::from([]),
+                                    }
+                                });
+                                (*id, Some(definition))
+                            })
+                            .collect(),
+                    );
+                }
+            }
         }
 
         FishData {
@@ -1117,6 +1214,7 @@ mod tests {
             tug: Tug::Light,
             hookset: Hookset::Precision,
             intuition: None,
+            resolved_mooch: None,
             snagging: false,
             gig: false,
             folklore: false,
@@ -1233,6 +1331,7 @@ mod tests {
             collectable: false,
             patch: (7, 0),
             intuition: None,
+            resolved_mooch: None,
             lure: Lure::Modest,
             lure_proc: false,
         };
@@ -1329,6 +1428,7 @@ mod tests {
             collectable: false,
             patch: (7, 0),
             intuition: None,
+            resolved_mooch: None,
             lure: Lure::Modest,
             lure_proc: false,
         };
@@ -1709,5 +1809,34 @@ mod tests {
 
         assert_eq!(window.start(), EorzeaTime::new(1, 1, 1, 3, 0, 0).unwrap());
         assert_eq!(window.end(), EorzeaTime::new(1, 1, 1, 6, 0, 0).unwrap());
+    }
+
+    #[test]
+    pub fn mooch_window_includes_mooch_fish_windows() {
+        let data = crate::carbuncledata::carbuncle_fishes().unwrap();
+        let shonisaurus = data.fish_by_id(8772).unwrap();
+
+        let window = shonisaurus
+            .next_window(
+                EorzeaTime::new(1, 1, 1, 0, 0, 0).unwrap(),
+                false,
+                true,
+                false,
+                DEFAULT_INTUITION_LOOKBACK_MINUTES,
+                10_000,
+            )
+            .expect("Shonisaurus should have a window");
+
+        let mooch = window
+            .mooch()
+            .expect("Shonisaurus should have mooch fish requirements");
+        let mooch_fish = mooch.mooch_fish();
+        assert_eq!(mooch_fish.len(), 2);
+        assert_eq!(mooch_fish[0].fish(), data.fish_by_id(8772).unwrap().mooch_path().unwrap()[0]);
+        assert_eq!(mooch_fish[1].fish(), data.fish_by_id(8772).unwrap().mooch_path().unwrap()[1]);
+        for setup in mooch_fish {
+            assert!(!setup.uses_fish_eyes());
+            assert!(setup.window().start() < window.end());
+        }
     }
 }
