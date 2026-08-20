@@ -29596,7 +29596,7 @@
       "weatherSet": [
         8
       ],
-      "startHour": 12,
+      "startHour": 13,
       "endHour": 15,
       "location": 302,
       "bestCatchPath": [
@@ -29608,7 +29608,7 @@
           6
         ]
       ],
-      "intuitionLength": null,
+      "intuitionLength": 360,
       "patch": 7.55,
       "folklore": 2515,
       "collectable": null,
@@ -29646,7 +29646,7 @@
           3
         ]
       ],
-      "intuitionLength": null,
+      "intuitionLength": 900,
       "patch": 7.55,
       "folklore": 2515,
       "collectable": null,
@@ -29713,7 +29713,7 @@
           2
         ]
       ],
-      "intuitionLength": null,
+      "intuitionLength": 600,
       "patch": 7.55,
       "folklore": 2519,
       "collectable": null,
@@ -29747,7 +29747,7 @@
           1
         ]
       ],
-      "intuitionLength": null,
+      "intuitionLength": 90,
       "patch": 7.55,
       "folklore": 2519,
       "collectable": null,
