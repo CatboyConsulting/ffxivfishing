@@ -81,8 +81,9 @@ function timeToSecs(str) {
 }
 
 function secsToTime(secs) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
+  const total = secs % 86400;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
 }
 
@@ -313,10 +314,10 @@ function createScheduleRow(entry) {
     <select>${daySelectHtml(entry.dayOfWeek !== undefined ? String(entry.dayOfWeek) : "")}</select>
   </label>
   <label>Start
-    <input type="text" value="${escapeHtml(secsToTime(entry.startSec))}" />
+    <input type="time" value="${escapeHtml(secsToTime(entry.startSec))}" />
   </label>
   <label>End
-    <input type="text" value="${escapeHtml(secsToTime(entry.endSec))}" />
+    <input type="time" value="${escapeHtml(secsToTime(entry.endSec))}" />
   </label>
   <button type="button" class="remove-btn" title="Remove" aria-label="Remove schedule">&#10005;</button>
 `;
@@ -348,7 +349,7 @@ function readSchedule() {
   const result = [];
   for (const row of rows) {
     const selects = row.querySelectorAll("select");
-    const inputs = row.querySelectorAll("input[type=text]");
+    const inputs = row.querySelectorAll("input[type=time]");
     const dayVal = selects[0].value;
     const startSec = timeToSecs(inputs[0].value);
     const endSec = timeToSecs(inputs[1].value);
