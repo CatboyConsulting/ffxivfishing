@@ -1,10 +1,14 @@
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 
 use crate::{
     eorzea_time::EorzeaTime,
-    fish::{DEFAULT_INTUITION_LOOKBACK_MINUTES, DEFAULT_WINDOW_SEARCH_LIMIT, Fish, FishWindow},
+    fish::{
+        Fish, FishData, FishWindow, DEFAULT_INTUITION_LOOKBACK_MINUTES,
+        DEFAULT_WINDOW_SEARCH_LIMIT,
+    },
 };
 
 const DAY_SECS: i64 = 86_400;
@@ -71,6 +75,102 @@ pub fn fish_windows_in_schedule(
     }
 
     windows
+}
+
+pub fn fish_next_window_in_schedule(
+    fish: &Fish,
+    timestamp: EorzeaTime,
+    schedule: &[ScheduleEntry],
+    timezone_offset_secs: i32,
+    filter_intuition: bool,
+    use_fish_eyes: bool,
+) -> Option<FishWindow> {
+    let now = timestamp.to_system_time();
+    let mut current = timestamp;
+    let mut include_current_ongoing = true;
+    let mut budget = DEFAULT_WINDOW_SEARCH_LIMIT;
+
+    while budget > 0 {
+        let window = fish.next_window(
+            current,
+            include_current_ongoing,
+            filter_intuition,
+            use_fish_eyes,
+            DEFAULT_INTUITION_LOOKBACK_MINUTES,
+            DEFAULT_WINDOW_SEARCH_LIMIT,
+        )?;
+        let window_start = window.start().to_system_time();
+        let window_end = window.end().to_system_time();
+
+        if window_end > now
+            && window_overlaps_any_schedule(
+                window_start,
+                window_end,
+                schedule,
+                timezone_offset_secs,
+            )
+        {
+            return Some(window);
+        }
+
+        current = window.end();
+        include_current_ongoing = false;
+        budget -= 1;
+    }
+
+    None
+}
+
+#[derive(Default)]
+pub struct ScheduleNextWindowCache {
+    bucket: u64,
+    fingerprint: u64,
+    timezone_offset_secs: i32,
+    entries: HashMap<(u32, bool), Option<FishWindow>>,
+}
+
+impl ScheduleNextWindowCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn next_window(
+        &mut self,
+        fish_data: &FishData,
+        fish_id: u32,
+        now: EorzeaTime,
+        schedule: &[ScheduleEntry],
+        schedule_fingerprint: u64,
+        timezone_offset_secs: i32,
+        use_fish_eyes: bool,
+    ) -> Option<FishWindow> {
+        let bucket = now.unix_secs() / 60;
+        if bucket != self.bucket
+            || schedule_fingerprint != self.fingerprint
+            || timezone_offset_secs != self.timezone_offset_secs
+        {
+            self.bucket = bucket;
+            self.fingerprint = schedule_fingerprint;
+            self.timezone_offset_secs = timezone_offset_secs;
+            self.entries.clear();
+        }
+        let key = (fish_id, use_fish_eyes);
+        if let Some(cached) = self.entries.get(&key) {
+            return cached.clone();
+        }
+        let window = fish_data.fish_by_id(fish_id).and_then(|fish| {
+            fish_next_window_in_schedule(
+                fish,
+                now,
+                schedule,
+                timezone_offset_secs,
+                true,
+                use_fish_eyes,
+            )
+        });
+        self.entries.insert(key, window.clone());
+        window
+    }
 }
 
 fn window_overlaps_any_schedule(

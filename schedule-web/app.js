@@ -14,6 +14,8 @@ import init, {
   get_next_windows,
   filter_fish,
   get_fish_windows_in_schedule,
+  get_fish_next_window_in_schedule,
+  get_next_windows_in_schedule,
   unix_to_eorzea_esec,
   unix_from_eorzea_time,
 } from "./pkg/ffxivfishing_wasm.js";
@@ -170,17 +172,49 @@ function isPrerequisiteAlwaysUp(prerequisite) {
   );
 }
 
+function fishListConsiderSchedule() {
+  const el = document.getElementById("fish-list-schedule");
+  return el ? el.checked : true;
+}
+
+function setFishListConsiderSchedule(value) {
+  const el = document.getElementById("fish-list-schedule");
+  if (!el) return;
+  el.checked = value === true;
+}
+
+function persistFishListConsiderSchedule(value) {
+  const cfg = getStoredConfig();
+  cfg.fishListConsiderSchedule = value === true;
+  setStoredConfig(cfg);
+}
+
+function scheduleContextForList() {
+  if (!fishListConsiderSchedule()) return null;
+  const p = readForm();
+  if (!p.schedule || p.schedule.length === 0) return null;
+  return {
+    scheduleJson: JSON.stringify(p.schedule),
+    timezoneOffsetSecs: -new Date().getTimezoneOffset() * 60,
+  };
+}
+
 function getNextFishWindow(id, nowEorzea) {
   const useFishEyes = Boolean(
     document.getElementById("use-fish-eyes")?.checked,
   );
+  const ctx = scheduleContextForList();
   try {
-    const nextJson = get_fish_next_window(
-      id,
-      nowEorzea,
-      FILTER_INTUITION,
-      useFishEyes,
-    );
+    const nextJson = ctx
+      ? get_fish_next_window_in_schedule(
+        id,
+        nowEorzea,
+        ctx.scheduleJson,
+        ctx.timezoneOffsetSecs,
+        FILTER_INTUITION,
+        useFishEyes,
+      )
+      : get_fish_next_window(id, nowEorzea, FILTER_INTUITION, useFishEyes);
     return JSON.parse(nextJson);
   } catch {
     return null;
@@ -191,8 +225,17 @@ function getNextWindows(ids, nowEorzea) {
   const useFishEyes = Boolean(
     document.getElementById("use-fish-eyes")?.checked,
   );
+  const ctx = scheduleContextForList();
   try {
-    const raw = get_next_windows(JSON.stringify(ids), nowEorzea, useFishEyes);
+    const raw = ctx
+      ? get_next_windows_in_schedule(
+        JSON.stringify(ids),
+        nowEorzea,
+        ctx.scheduleJson,
+        ctx.timezoneOffsetSecs,
+        useFishEyes,
+      )
+      : get_next_windows(JSON.stringify(ids), nowEorzea, useFishEyes);
     const entries = JSON.parse(raw);
     const map = new Map();
     for (const entry of entries) map.set(entry.id, entry.window);
@@ -2042,7 +2085,7 @@ function syncResultsToggles(p) {
   const fishEyes = document.getElementById("results-fish-eyes");
   const ignoreSchedule = document.getElementById("results-ignore-schedule");
   if (fishEyes) fishEyes.checked = p.useFishEyes === true;
-  if (ignoreSchedule) ignoreSchedule.checked = false;
+  if (ignoreSchedule) ignoreSchedule.checked = !fishListConsiderSchedule();
 }
 
 function requeryResults() {
@@ -2219,6 +2262,7 @@ document.addEventListener("keydown", (event) => {
 async function main() {
   const formData = getFormData();
   populateForm(formData);
+  setFishListConsiderSchedule(getStoredConfig().fishListConsiderSchedule !== false);
 
   const elStatus = document.getElementById("status");
   try {
@@ -2750,6 +2794,13 @@ document.getElementById("big-fish-only").addEventListener("change", () => {
 document.getElementById("fish-list-sort").addEventListener("change", () => {
   debouncedRenderFishList();
 });
+
+document
+  .getElementById("fish-list-schedule")
+  .addEventListener("change", () => {
+    persistFishListConsiderSchedule(fishListConsiderSchedule());
+    renderFishList();
+  });
 
 document
   .getElementById("fish-list-search-clear")

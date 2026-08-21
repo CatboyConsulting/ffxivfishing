@@ -715,11 +715,29 @@ td {
   gap: 0.35rem;
   color: var(--text-muted);
   font-size: 0.85rem;
+  border-left: 1px solid var(--bg-border);
+  padding-left: 1rem;
 }
 
 .fish-list-section .fish-list-sort select {
   font-size: 0.85rem;
   padding: 3px 5px;
+}
+
+.fish-list-section .schedule-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.fish-list-section .schedule-toggle input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--bg-primary);
 }
 
 .fish-list-section .fish-list-search {
@@ -1277,6 +1295,15 @@ footer {
     max-height: calc(100dvh - 2rem);
     top: 1rem;
     transform: translateX(-50%);
+  }
+
+  .fish-list-section .fish-list-header {
+    flex-wrap: wrap;
+    row-gap: 0.25rem;
+  }
+
+  .fish-list-section .fish-list-header h2 {
+    flex: 1 1 100%;
   }
 
   .saved-item {

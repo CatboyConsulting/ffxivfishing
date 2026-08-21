@@ -1,7 +1,7 @@
 on: [push]
 jobs:
   test:
-    runs-on: docker
+    runs-on: docker-builder
     steps:
       - uses: actions/checkout@v4
       - uses: https://github.com/dtolnay/rust-toolchain@stable

@@ -5,7 +5,7 @@ use ffxivfishing::{
     eorzea_time::EorzeaTime,
     filter::{self, NextWindowCache},
     fish::{DEFAULT_INTUITION_LOOKBACK_MINUTES, Fish, FishData},
-    schedule::{self, ScheduleEntry},
+    schedule::{self, ScheduleEntry, ScheduleNextWindowCache},
 };
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -13,6 +13,16 @@ use wasm_bindgen::prelude::*;
 thread_local! {
     static FISH_DATA: OnceCell<FishData> = const { OnceCell::new() };
     static NEXT_WINDOW_CACHE: RefCell<NextWindowCache> = RefCell::new(NextWindowCache::new());
+    static SCHEDULE_NEXT_WINDOW_CACHE: RefCell<ScheduleNextWindowCache> = RefCell::new(ScheduleNextWindowCache::new());
+}
+
+fn schedule_fingerprint(schedule_json: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in schedule_json.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
 }
 
 #[derive(Serialize)]
@@ -354,6 +364,77 @@ pub fn get_next_windows(
                     id: *id,
                     window: cache
                         .next_window(fd, *id, now, use_fish_eyes)
+                        .map(|window| fish_window_to_info(&window, fd)),
+                })
+                .collect()
+        });
+        serde_json::to_string(&entries).map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
+pub fn get_fish_next_window_in_schedule(
+    fish_id: u32,
+    timestamp_esec: u64,
+    schedule_json: &str,
+    timezone_offset_secs: i32,
+    filter_intuition: bool,
+    use_fish_eyes: bool,
+) -> Result<String, JsValue> {
+    let schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {e}")))?;
+    with_fish_data(|fd| {
+        let fish = fd
+            .fish_by_id(fish_id)
+            .ok_or_else(|| JsValue::from_str("Fish not found"))?;
+        let now = EorzeaTime::from_esecs(timestamp_esec);
+        let window = schedule::fish_next_window_in_schedule(
+            fish,
+            now,
+            &schedule,
+            timezone_offset_secs,
+            filter_intuition,
+            use_fish_eyes,
+        );
+        match window {
+            Some(fw) => serde_json::to_string(&Some(fish_window_to_info(&fw, fd))),
+            None => serde_json::to_string::<Option<FishWindow>>(&None),
+        }
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+    })
+}
+
+#[wasm_bindgen]
+pub fn get_next_windows_in_schedule(
+    fish_ids_json: &str,
+    timestamp_esec: u64,
+    schedule_json: &str,
+    timezone_offset_secs: i32,
+    use_fish_eyes: bool,
+) -> Result<String, JsValue> {
+    let fish_ids: Vec<u32> = serde_json::from_str(fish_ids_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid fish ids JSON: {e}")))?;
+    let schedule: Vec<ScheduleEntry> = serde_json::from_str(schedule_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid schedule JSON: {e}")))?;
+    let fingerprint = schedule_fingerprint(schedule_json);
+    with_fish_data(|fd| {
+        let now = EorzeaTime::from_esecs(timestamp_esec);
+        let entries: Vec<FishWindowEntry> = SCHEDULE_NEXT_WINDOW_CACHE.with(|cell| {
+            let mut cache = cell.borrow_mut();
+            fish_ids
+                .iter()
+                .map(|id| FishWindowEntry {
+                    id: *id,
+                    window: cache
+                        .next_window(
+                            fd,
+                            *id,
+                            now,
+                            &schedule,
+                            fingerprint,
+                            timezone_offset_secs,
+                            use_fish_eyes,
+                        )
                         .map(|window| fish_window_to_info(&window, fd)),
                 })
                 .collect()
